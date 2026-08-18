@@ -191,7 +191,7 @@ test("mergeImport upserts and never drops entries missing from the backup", () =
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `node --test test/`
+Run: `node --test test/*.test.js`
 Expected: FAIL — `Cannot find module '../model.js'`.
 
 - [ ] **Step 3: Write `model.js`**
@@ -374,7 +374,7 @@ Expected: FAIL — `Cannot find module '../model.js'`.
   "private": true,
   "description": "Chrome extension: portfolio vault for filling in TCASFolio",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   }
 }
 ```
@@ -389,7 +389,7 @@ node_modules/
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `npm test`
-Expected: PASS — 13 tests, 0 failures.
+Expected: PASS — `ℹ pass 13`, `ℹ fail 0`.
 
 - [ ] **Step 6: Commit**
 
@@ -1347,7 +1347,7 @@ git commit -m "feat: add read-only shadow-dom panel on TCASFolio"
 - [ ] **Step 1: Run the automated tests**
 
 Run: `npm test`
-Expected: PASS — 13 tests, 0 failures. Paste the actual output into the commit or the report; do not claim a pass without it.
+Expected: PASS — `ℹ pass 13`, `ℹ fail 0`. Paste the actual output into the commit or the report; do not claim a pass without it.
 
 - [ ] **Step 2: Confirm the no-network rule holds**
 

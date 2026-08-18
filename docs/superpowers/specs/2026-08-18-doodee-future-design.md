@@ -46,8 +46,20 @@ and splices that position out of a freshly re-read array.
 
 The guide asks for JSON export/import to guard against storage loss
 ("กัน storage หาย"). Import therefore **upserts by `id`** and reports
-added/updated counts. A replace-on-import would let a stale backup silently
-destroy newer entries, making the backup feature itself a way to lose data.
+added/updated counts. A replace-on-import would drop every entry the backup
+file does not carry, making the backup feature itself a way to lose data.
+
+**What this does and does not protect.** Entries *absent* from the backup
+survive an import untouched — that is the guarantee. For an id present on
+both sides the incoming backup wins unconditionally, so importing a stale
+backup does revert edits made to those items since it was taken. That is
+deliberate: the opposite rule (existing entry wins) would make it impossible
+to restore an item you damaged, which is the main reason to keep backups.
+There is no `updatedAt` in the guide's data model and no freshness
+comparison, so the popup's `เพิ่ม X · อัปเดต Y` status line is the only
+signal that Y existing entries were overwritten. Anyone adding a
+restore-from-backup affordance later must not assume the model layer
+resolves conflicts by recency — it does not.
 
 `parseImport` accepts both the wrapper object we export and a bare array, so
 a hand-edited backup still restores.
