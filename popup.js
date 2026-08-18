@@ -202,6 +202,51 @@ el("saveBtn").addEventListener("click", async () => {
 
 el("cancelBtn").addEventListener("click", () => resetForm());
 
+el("exportBtn").addEventListener("click", async () => {
+  const items = await Storage.getItems();
+  const text = JSON.stringify(Model.toExport(items, Date.now()), null, 2);
+  const blob = new Blob([text], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `doodee-future-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+
+  // ปล่อยทิ้งหลังดาวน์โหลดเริ่มแล้ว
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  showStatus(`ส่งออก ${items.length} รายการแล้ว`);
+});
+
+el("importBtn").addEventListener("click", () => el("importFile").click());
+
+el("importFile").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const incoming = Model.parseImport(await file.text());
+    let added = 0;
+    let updated = 0;
+    // ผ่านคิวเดียวกับ save/delete กันเขียนชนกัน
+    const ok = await mutate((items) => {
+      // รวมแบบ upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ backup ต้องไม่หาย
+      const result = Model.mergeImport(items, incoming);
+      added = result.added;
+      updated = result.updated;
+      return result.items;
+    });
+    if (ok) {
+      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}`);
+      render();
+    }
+  } catch (error) {
+    showStatus(error.message, true);
+  } finally {
+    event.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
+  }
+});
+
 fillTypeOptions();
 // อีกหน้าต่างหนึ่งแก้ข้อมูล หน้านี้ต้องตามทัน
 Storage.onItemsChanged((items) => render(items));
