@@ -400,11 +400,10 @@ git commit -m "feat: add pure model layer with id migration, merge-import, and t
 
 ---
 
-### Task 2: `storage.js` and the manifest
+### Task 2: `storage.js`
 
 **Files:**
 - Create: `storage.js`
-- Modify: `manifest.json` (whole file)
 
 **Interfaces:**
 - Consumes: `globalThis.Model` from Task 1 — `normalize`.
@@ -467,50 +466,22 @@ There is no unit test for this file — that is the point of the split. It must 
 })(globalThis);
 ```
 
-- [ ] **Step 2: Replace `manifest.json`**
+- [ ] **Step 2: Verify it parses and stayed thin**
 
-Note what is *absent*: no `host_permissions` (the `content_scripts.matches` entry already grants what the panel needs), and `content.css` is a web-accessible resource rather than a `content_scripts.css` entry, because it is linked into a shadow root.
+Run: `node --check storage.js && echo "syntax ok" && grep -cE "fetch\(|XMLHttpRequest|https?://" storage.js`
+Expected: `syntax ok` followed by `0` — no network APIs, no URLs.
 
-```json
-{
-  "manifest_version": 3,
-  "name": "Doodee future",
-  "version": "1.0",
-  "description": "คลังเก็บข้อมูลผลงานจากเล่ม portfolio เดิม สำหรับกรอก TCASFolio",
-  "permissions": ["storage"],
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "Doodee future"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://student.mytcas.com/*"],
-      "js": ["model.js", "storage.js", "content.js"],
-      "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["content.css"],
-      "matches": ["https://student.mytcas.com/*"]
-    }
-  ]
-}
-```
+The manifest is deliberately left alone in this task. Declaring the content
+script before `content.js` exists makes Chrome refuse to load the extension
+entirely, which would block the hands-on checks in Tasks 3 and 4. Task 5
+adds the content-script wiring at the same time as the files it names.
 
-- [ ] **Step 3: Verify the manifest parses**
-
-Run: `node -e "const m=require('./manifest.json'); if(m.host_permissions) throw new Error('host_permissions must be absent'); console.log('ok', m.content_scripts[0].js.join(','))"`
-Expected: `ok model.js,storage.js,content.js`
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add storage.js manifest.json
-git commit -m "feat: add storage adapter and wire content script into manifest"
+git add storage.js
+git commit -m "feat: add chrome.storage adapter over the model"
 ```
-
-**Note:** the extension will not load cleanly in Chrome until Task 5 creates `content.js` and `content.css`. That is expected between these commits.
 
 ---
 
@@ -896,7 +867,7 @@ Expected: PASS — Task 3 touches no model code, so this is a regression check.
 
 - [ ] **Step 5: Load the extension and verify by hand**
 
-In Chrome: `chrome://extensions` → Developer mode on → Load unpacked → select this folder. Chrome will report `content.js` as missing; ignore that until Task 5. Open the popup and confirm:
+In Chrome: `chrome://extensions` → Developer mode on → Load unpacked → select this folder. It should load with no error badge. Open the popup and confirm:
 - The type dropdown lists all five types.
 - Saving with an empty title shows the red "ต้องมีชื่อผลงานก่อน…" message and saves nothing.
 - Saving a full item clears the form and the item appears with its tag chips.
@@ -995,6 +966,7 @@ git commit -m "feat: add JSON export and merge-on-import backup"
 **Files:**
 - Create: `content.js`
 - Create: `content.css`
+- Modify: `manifest.json` (whole file)
 
 **Interfaces:**
 - Consumes: `Model.TYPES`, `Model.filterItems`, `Model.allTags`; `Storage.getItems`, `Storage.onItemsChanged`, `Storage.getPanelCollapsed`, `Storage.setPanelCollapsed`. Both globals are already loaded — the manifest lists `model.js` and `storage.js` ahead of `content.js` in the same content-script entry, so they share one isolated world.
@@ -1002,7 +974,46 @@ git commit -m "feat: add JSON export and merge-on-import backup"
 
 Read-only by design. The panel copies to the clipboard and never writes to the page, per the guide's rules 1 and 3.
 
-- [ ] **Step 1: Create `content.css`**
+- [ ] **Step 1: Replace `manifest.json`**
+
+This lands here, not earlier, because Chrome refuses to load an extension
+whose manifest names a content-script file that does not exist. Create
+`content.js` and `content.css` in the next two steps before reloading.
+
+Note what is *absent*: no `host_permissions` — the `content_scripts.matches`
+entry already grants everything the panel needs, so the guide's target
+manifest lists one line more than it has to. And `content.css` is a
+web-accessible resource rather than a `content_scripts.css` entry, because it
+is linked into a shadow root rather than injected into the page.
+
+```json
+{
+  "manifest_version": 3,
+  "name": "Doodee future",
+  "version": "1.0",
+  "description": "คลังเก็บข้อมูลผลงานจากเล่ม portfolio เดิม สำหรับกรอก TCASFolio",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Doodee future"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://student.mytcas.com/*"],
+      "js": ["model.js", "storage.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.css"],
+      "matches": ["https://student.mytcas.com/*"]
+    }
+  ]
+}
+```
+
+- [ ] **Step 2: Create `content.css`**
 
 These styles are linked into the shadow root, not the page. `all: initial` on `:host` is the load-bearing line: inherited properties (`font-family`, `color`, `line-height`) cross the shadow boundary from the page, and this resets them before ours are applied.
 
@@ -1113,7 +1124,7 @@ These styles are linked into the shadow root, not the page. `all: initial` on `:
 .empty { padding: 14px 0; color: #878d9b; font-size: 12px; text-align: center; }
 ```
 
-- [ ] **Step 2: Create `content.js`**
+- [ ] **Step 3: Create `content.js`**
 
 ```js
 // ---------------------------------------------------------
@@ -1295,14 +1306,14 @@ These styles are linked into the shadow root, not the page. `all: initial` on `:
 })();
 ```
 
-- [ ] **Step 3: Verify the extension loads with no errors**
+- [ ] **Step 4: Verify the extension loads with no errors**
 
 Run: `node -e "for (const f of require('./manifest.json').content_scripts[0].js.concat(['content.css','popup.js','popup.css','popup.html'])) require('node:fs').accessSync(f); console.log('all declared files present')"`
 Expected: `all declared files present`
 
 Then reload at `chrome://extensions` and confirm the card shows no "Errors" badge.
 
-- [ ] **Step 4: Verify the panel by hand**
+- [ ] **Step 5: Verify the panel by hand**
 
 Log in to `https://student.mytcas.com/` and confirm:
 - The panel appears at the right edge, styled — dark background, rounded left corners, its own font. If it renders with the site's fonts or spacing, the shadow root is not doing its job.
@@ -1315,10 +1326,10 @@ Log in to `https://student.mytcas.com/` and confirm:
 - Navigate between TCASFolio pages (it is a SPA) and confirm the panel persists and is not duplicated.
 - Nothing in the application form is modified, and no verified field is touched.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add content.js content.css
+git add content.js content.css manifest.json
 git commit -m "feat: add read-only shadow-dom panel on TCASFolio"
 ```
 
