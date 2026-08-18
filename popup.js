@@ -148,9 +148,10 @@ function itemCard(item) {
     }
     clearTimeout(armTimer);
     // ลบด้วย id ไม่ใช่ตำแหน่งในลิสต์ — ตำแหน่งเปลี่ยนได้ระหว่างที่ popup เปิดอยู่
-    await mutate((items) => Model.remove(items, item.id), "ลบแล้ว");
-    if (editingId === item.id) resetForm();
-    render();
+    const ok = await mutate((items) => Model.remove(items, item.id), "ลบแล้ว");
+    // ล้างฟอร์มเฉพาะตอนลบสำเร็จ — ลบไม่ติดแล้วล้าง ผู้ใช้จะเสียของที่พิมพ์ค้างไว้
+    if (ok && editingId === item.id) resetForm();
+    render(); // วาดใหม่เสมอ ปุ่มจะได้ไม่ค้างอยู่ที่ "แน่ใจ?"
   });
 
   actions.append(copyBtn, editBtn, delBtn);
