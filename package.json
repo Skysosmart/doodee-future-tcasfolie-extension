@@ -1,0 +1,9 @@
+{
+  "name": "doodee-future",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension: portfolio vault for filling in TCASFolio",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
