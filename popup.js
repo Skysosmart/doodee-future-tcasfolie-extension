@@ -3,88 +3,174 @@
 // ไม่มีการส่งออกไปที่ไหนทั้งสิ้น
 // ---------------------------------------------------------
 
-const KEY = "folioItems";
+const el = (id) => document.getElementById(id);
 
-// ดึงรายการทั้งหมดจากที่เก็บ
-async function getItems() {
-  const data = await chrome.storage.local.get(KEY);
-  return data[KEY] || []; // ถ้ายังไม่เคยบันทึก จะได้ลิสต์ว่าง
+let editingId = null; // null = กำลังเพิ่มใหม่, มีค่า = กำลังแก้ไขชิ้นนั้น
+let statusTimer = null;
+
+function showStatus(message, isError) {
+  const status = el("status");
+  status.textContent = message;
+  status.className = isError ? "error" : "ok";
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
+    status.textContent = "";
+  }, 4000);
 }
 
-// เขียนรายการทั้งหมดกลับลงที่เก็บ
-async function setItems(items) {
-  await chrome.storage.local.set({ [KEY]: items });
+function fillTypeOptions() {
+  const select = el("type");
+  for (const type of Model.TYPES) {
+    const option = document.createElement("option");
+    option.textContent = type;
+    select.appendChild(option);
+  }
 }
 
-// วาดรายการออกมาบนหน้าจอ
-async function render() {
-  const items = await getItems();
-  const list = document.getElementById("list");
-  const empty = document.getElementById("empty");
+function readForm() {
+  return {
+    type: el("type").value,
+    title: el("title").value,
+    org: el("org").value,
+    tags: el("tags").value,
+    detail: el("detail").value,
+  };
+}
 
-  document.getElementById("count").textContent = items.length;
-  list.innerHTML = "";
-  empty.style.display = items.length ? "none" : "block";
+function resetForm() {
+  editingId = null;
+  el("type").selectedIndex = 0;
+  for (const id of ["title", "org", "tags", "detail"]) el(id).value = "";
+  el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
+  el("saveBtn").textContent = "บันทึกลงคลัง";
+  el("cancelBtn").hidden = true;
+}
 
-  items.forEach((item, index) => {
-    const box = document.createElement("div");
-    box.className = "item";
+function startEditing(item) {
+  editingId = item.id;
+  el("type").value = item.type;
+  el("title").value = item.title;
+  el("org").value = item.org;
+  el("tags").value = Model.formatTags(item.tags);
+  el("detail").value = item.detail;
+  el("formHeading").textContent = "แก้ไขผลงาน";
+  el("saveBtn").textContent = "อัปเดต";
+  el("cancelBtn").hidden = false;
+  window.scrollTo(0, 0);
+  el("title").focus();
+}
 
-    const title = document.createElement("div");
-    title.className = "item-title";
-    title.textContent = item.title;
+function itemCard(item) {
+  const box = document.createElement("div");
+  box.className = "item";
 
-    const meta = document.createElement("div");
-    meta.className = "item-meta";
-    meta.textContent = `${item.type} · ${item.org}`;
+  const title = document.createElement("div");
+  title.className = "item-title";
+  title.textContent = item.title;
 
-    const actions = document.createElement("div");
-    actions.className = "item-actions";
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  meta.textContent = item.org ? `${item.type} · ${item.org}` : item.type;
 
-    const copyBtn = document.createElement("button");
-    copyBtn.textContent = "คัดลอกรายละเอียด";
-    copyBtn.onclick = async () => {
+  box.append(title, meta);
+
+  if (item.tags.length) {
+    const tags = document.createElement("div");
+    tags.className = "tags";
+    for (const tag of item.tags) {
+      const chip = document.createElement("span");
+      chip.className = "tag";
+      chip.textContent = tag;
+      tags.appendChild(chip);
+    }
+    box.appendChild(tags);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "item-actions";
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "copy";
+  copyBtn.textContent = "คัดลอกรายละเอียด";
+  copyBtn.addEventListener("click", async () => {
+    try {
       await navigator.clipboard.writeText(item.detail);
       copyBtn.textContent = "คัดลอกแล้ว ✓";
-      setTimeout(() => (copyBtn.textContent = "คัดลอกรายละเอียด"), 1200);
-    };
-
-    const delBtn = document.createElement("button");
-    delBtn.textContent = "ลบ";
-    delBtn.className = "del";
-    delBtn.onclick = async () => {
-      const current = await getItems();
-      current.splice(index, 1); // เอาตัวที่ตำแหน่งนี้ออก
-      await setItems(current);
-      render();
-    };
-
-    actions.append(copyBtn, delBtn);
-    box.append(title, meta, actions);
-    list.appendChild(box);
+    } catch (error) {
+      copyBtn.textContent = "คัดลอกไม่สำเร็จ";
+    }
+    setTimeout(() => {
+      copyBtn.textContent = "คัดลอกรายละเอียด";
+    }, 1200);
   });
+
+  const editBtn = document.createElement("button");
+  editBtn.className = "edit";
+  editBtn.textContent = "แก้ไข";
+  editBtn.addEventListener("click", () => startEditing(item));
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "del";
+  delBtn.textContent = "ลบ";
+  let armed = false;
+  let armTimer = null;
+  delBtn.addEventListener("click", async () => {
+    if (!armed) {
+      // ยืนยันสองจังหวะแทน confirm() เพราะ dialog ทำให้ popup ปิดตัวเอง
+      armed = true;
+      delBtn.textContent = "แน่ใจ?";
+      armTimer = setTimeout(() => {
+        armed = false;
+        delBtn.textContent = "ลบ";
+      }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    // ลบด้วย id ไม่ใช่ตำแหน่งในลิสต์ — ตำแหน่งเปลี่ยนได้ระหว่างที่ popup เปิดอยู่
+    const current = await Storage.getItems();
+    await Storage.setItems(Model.remove(current, item.id));
+    if (editingId === item.id) resetForm();
+    showStatus("ลบแล้ว");
+    render();
+  });
+
+  actions.append(copyBtn, editBtn, delBtn);
+  box.appendChild(actions);
+  return box;
 }
 
-// ปุ่มบันทึก
-document.getElementById("saveBtn").addEventListener("click", async () => {
-  const title = document.getElementById("title").value.trim();
-  if (!title) return; // ไม่มีชื่อผลงาน ก็ไม่บันทึก
+async function render(known) {
+  const items = known || (await Storage.getItems());
+  el("count").textContent = items.length;
+  el("empty").style.display = items.length ? "none" : "block";
+  el("list").replaceChildren(...items.map(itemCard));
+}
 
-  const items = await getItems();
-  items.push({
-    type: document.getElementById("type").value,
-    title: title,
-    org: document.getElementById("org").value.trim(),
-    detail: document.getElementById("detail").value.trim(),
+el("saveBtn").addEventListener("click", async () => {
+  const fields = readForm();
+  if (!fields.title.trim()) {
+    showStatus("ต้องมีชื่อผลงานก่อนถึงจะบันทึกได้", true);
+    el("title").focus();
+    return;
+  }
+
+  const items = await Storage.getItems();
+  const existing = editingId ? items.find((i) => i.id === editingId) : null;
+  const item = Model.makeItem(fields, {
+    id: editingId || undefined,
+    // แก้ไขแล้ววันที่สร้างต้องไม่เปลี่ยน
+    now: existing ? existing.createdAt : Date.now(),
   });
-  await setItems(items);
 
-  // ล้างช่องกรอกให้พร้อมกรอกอันต่อไป
-  document.getElementById("title").value = "";
-  document.getElementById("org").value = "";
-  document.getElementById("detail").value = "";
-
+  await Storage.setItems(Model.upsert(items, item));
+  showStatus(editingId ? "อัปเดตแล้ว" : "บันทึกแล้ว");
+  resetForm();
   render();
 });
 
-render(); // วาดครั้งแรกตอนเปิด popup
+el("cancelBtn").addEventListener("click", () => resetForm());
+
+fillTypeOptions();
+// อีกหน้าต่างหนึ่งแก้ข้อมูล หน้านี้ต้องตามทัน
+Storage.onItemsChanged((items) => render(items));
+render();

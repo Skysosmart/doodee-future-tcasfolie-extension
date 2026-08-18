@@ -1,0 +1,120 @@
+:root {
+  --bg: #14161a;
+  --panel: #1d2027;
+  --line: #2b2f38;
+  --text: #e9eaee;
+  --dim: #878d9b;
+  --accent: #5b8cff;
+  --danger: #ff7b7b;
+  --ok: #7bd88f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 360px;
+  margin: 0;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Mali", "Noto Sans Thai", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+h1 {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin: 0 0 12px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--dim);
+  margin: 8px 0 3px;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 7px 9px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+textarea { min-height: 70px; resize: vertical; }
+
+button {
+  font-family: inherit;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#saveBtn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 7px;
+  font-size: 12px;
+}
+
+#cancelBtn { width: 100%; margin-top: 6px; }
+
+.row { display: flex; gap: 6px; }
+.row .ghost { flex: 1; }
+
+#status { min-height: 16px; margin: 8px 0 0; font-size: 12px; }
+#status.ok { color: var(--ok); }
+#status.error { color: var(--danger); }
+
+hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
+
+.item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.item-title { font-weight: 600; margin-bottom: 2px; word-break: break-word; }
+.item-meta { font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.tag {
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.item-actions { display: flex; gap: 6px; }
+.item-actions button {
+  flex: 1;
+  padding: 6px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+/* ปุ่มคัดลอกข้อความยาวกว่าเพื่อน ให้กว้างกว่าหน่อย */
+.item-actions .copy { flex: 2; }
+.item-actions .del { color: var(--danger); }
+
+#empty { color: var(--dim); font-size: 13px; text-align: center; padding: 16px 0; }

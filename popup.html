@@ -2,97 +2,13 @@
 <html lang="th">
   <head>
     <meta charset="utf-8" />
-    <style>
-      :root {
-        --bg: #14161a;
-        --panel: #1d2027;
-        --line: #2b2f38;
-        --text: #e9eaee;
-        --dim: #878d9b;
-        --accent: #5b8cff;
-      }
-      * { box-sizing: border-box; }
-      body {
-        width: 360px;
-        margin: 0;
-        padding: 14px;
-        background: var(--bg);
-        color: var(--text);
-        font-family: "Noto Sans Thai", system-ui, sans-serif;
-        font-size: 14px;
-      }
-      h1 {
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--dim);
-        margin: 0 0 12px;
-      }
-      label {
-        display: block;
-        font-size: 12px;
-        color: var(--dim);
-        margin: 8px 0 3px;
-      }
-      input, select, textarea {
-        width: 100%;
-        padding: 7px 9px;
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 5px;
-        color: var(--text);
-        font-family: inherit;
-        font-size: 13px;
-      }
-      textarea { min-height: 70px; resize: vertical; }
-      button {
-        font-family: inherit;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-      }
-      #saveBtn {
-        width: 100%;
-        margin-top: 12px;
-        padding: 9px;
-        background: var(--accent);
-        color: #fff;
-        font-size: 14px;
-      }
-      hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
-      .item {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 10px;
-        margin-bottom: 8px;
-      }
-      .item-title { font-weight: 600; margin-bottom: 2px; }
-      .item-meta { font-size: 12px; color: var(--dim); margin-bottom: 8px; }
-      .item-actions { display: flex; gap: 6px; }
-      .item-actions button {
-        flex: 1;
-        padding: 6px;
-        font-size: 12px;
-        background: transparent;
-        border: 1px solid var(--line);
-        color: var(--text);
-      }
-      .del { color: #ff7b7b !important; }
-      #empty { color: var(--dim); font-size: 13px; text-align: center; padding: 16px 0; }
-    </style>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <h1>เพิ่มผลงานจากเล่มเดิม</h1>
+    <h1 id="formHeading">เพิ่มผลงานจากเล่มเดิม</h1>
 
     <label for="type">ประเภท</label>
-    <select id="type">
-      <option>รางวัล / เกียรติบัตร</option>
-      <option>โครงงาน / วิจัย</option>
-      <option>กิจกรรม</option>
-      <option>การอบรม</option>
-      <option>ผลงานสร้างสรรค์</option>
-    </select>
+    <select id="type"></select>
 
     <label for="title">ชื่อผลงาน</label>
     <input id="title" type="text" />
@@ -100,10 +16,23 @@
     <label for="org">หน่วยงาน / ปี</label>
     <input id="org" type="text" placeholder="เช่น สพฐ. 2568" />
 
+    <label for="tags">แท็ก (คั่นด้วยจุลภาค)</label>
+    <input id="tags" type="text" placeholder="เช่น วิศวะ, คอม" />
+
     <label for="detail">รายละเอียด</label>
     <textarea id="detail"></textarea>
 
     <button id="saveBtn">บันทึกลงคลัง</button>
+    <button id="cancelBtn" class="ghost" hidden>ยกเลิกการแก้ไข</button>
+
+    <hr />
+
+    <div class="row">
+      <button id="exportBtn" class="ghost">ส่งออก JSON</button>
+      <button id="importBtn" class="ghost">นำเข้า JSON</button>
+    </div>
+    <input id="importFile" type="file" accept="application/json,.json" hidden />
+    <p id="status" role="status"></p>
 
     <hr />
 
@@ -111,6 +40,8 @@
     <div id="list"></div>
     <div id="empty">ยังไม่มีข้อมูล</div>
 
+    <script src="model.js"></script>
+    <script src="storage.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
