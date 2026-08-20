@@ -75,13 +75,33 @@
   note.className = "note";
   note.hidden = true;
 
+  const noteText = document.createElement("span");
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "undo";
+  undoBtn.textContent = "ย้อนกลับ";
+  undoBtn.hidden = true;
+  note.append(noteText, undoBtn);
+
   function showNote(message) {
-    note.textContent = message;
+    noteText.textContent = message;
+    undoBtn.hidden = true;
+    note.classList.remove("is-ok");
+    note.hidden = false;
+  }
+
+  // เติมผิดช่องเกิดได้ง่ายมาก ต้องมีทางกลับเสมอ ไม่งั้นของเดิมที่พิมพ์ไว้หายฟรี
+  function showFilled(message) {
+    noteText.textContent = message;
+    undoBtn.hidden = false;
+    note.classList.add("is-ok");
     note.hidden = false;
   }
 
   function clearNote() {
-    note.textContent = "";
+    noteText.textContent = "";
+    undoBtn.hidden = true;
+    note.classList.remove("is-ok");
     note.hidden = true;
   }
 
@@ -143,6 +163,139 @@
     );
   }
 
+  // -------------------------------------------------------------
+  // เติมข้อมูลลงช่องที่ผู้ใช้เลือกไว้
+  //
+  // จงใจไม่ใช้ selector ของเว็บเลยสักตัว — ใช้ "ช่องที่เพิ่ง focus" แทน
+  // เว็บเขาจะ deploy เปลี่ยนโครงสร้างกี่รอบก็ยังใช้ได้ และไม่ต้องเดาว่าช่องไหน
+  // คือช่องอะไร เพราะคนกดเป็นคนเลือกเอง
+  //
+  // ห้ามเด็ดขาด: กดส่งฟอร์มแทนผู้ใช้ / แตะช่องที่แก้ไม่ได้ / ทับของเดิมโดยไม่ถาม
+  // -------------------------------------------------------------
+
+  const BLOCKED_TYPES = new Set([
+    "password", "file", "checkbox", "radio", "hidden",
+    "submit", "button", "image", "reset", "range", "color",
+  ]);
+
+  let lastField = null; // ช่องล่าสุดในหน้าเว็บที่ผู้ใช้คลิก (ไม่ใช่ของ panel)
+  let lastFill = null; // { el, previous } สำหรับปุ่มย้อนกลับ
+
+  function isFillable(el) {
+    if (!el || el === host) return false;
+    if (el.isContentEditable) return true;
+    const tag = el.tagName;
+    if (tag === "TEXTAREA") return true;
+    if (tag !== "INPUT") return false;
+    return !BLOCKED_TYPES.has((el.type || "text").toLowerCase());
+  }
+
+  // capture: หยุด propagation ที่ host กัน bubble ของหน้าเว็บได้ แต่ capture
+  // วิ่งลงมาถึง document ก่อนเสมอ จึงต้องกรองเหตุการณ์ของ panel ออกเอง
+  document.addEventListener(
+    "focusin",
+    (event) => {
+      if (event.target === host) return;
+      // ไป focus ช่องที่เติมไม่ได้ (password, ปุ่ม, select) ต้อง "ลืม" ช่องเก่าด้วย
+      // ไม่งั้นกดเติมแล้วมันจะไปลงช่องก่อนหน้าที่ผู้ใช้ไม่ได้มองอยู่
+      lastField = isFillable(event.target) ? event.target : null;
+    },
+    true,
+  );
+
+  function fieldProblem(el) {
+    if (!el || !el.isConnected) {
+      return "คลิกช่องในฟอร์มที่จะกรอกก่อน แล้วค่อยกดปุ่มนี้";
+    }
+    if (el.readOnly || el.disabled || el.getAttribute("aria-readonly") === "true") {
+      return "ช่องนี้แก้ไม่ได้ — อาจเป็นข้อมูลที่ verify แล้ว ไม่แตะให้";
+    }
+    return "";
+  }
+
+  function readField(el) {
+    return el.isContentEditable ? el.textContent : el.value;
+  }
+
+  // React/Vue ไม่รู้จักการเซ็ต .value ตรง ๆ — ค่าจะขึ้นบนจอแต่ตอน submit เป็นว่าง
+  // ต้องเรียก native setter ของ prototype แล้วยิง input event ให้เขาเห็นเอง
+  function writeField(el, value) {
+    if (el.isContentEditable) {
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.execCommand("insertText", false, value);
+      return;
+    }
+    const proto =
+      el.tagName === "TEXTAREA"
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  undoBtn.addEventListener("click", () => {
+    if (!lastFill || !lastFill.el.isConnected) {
+      showNote("ย้อนกลับไม่ได้แล้ว ช่องนั้นไม่อยู่บนหน้านี้แล้ว");
+      return;
+    }
+    writeField(lastFill.el, lastFill.previous);
+    lastFill.el.focus();
+    lastFill = null;
+    clearNote();
+  });
+
+  function fillField(value, what, button, armed) {
+    const target = lastField;
+    const problem = fieldProblem(target);
+    if (problem) {
+      showNote(problem);
+      return false;
+    }
+
+    const previous = readField(target);
+    // ช่องมีของอยู่แล้ว = ผู้ใช้พิมพ์ไว้เอง หรือเว็บเติมมา ต้องถามก่อนทับ
+    if (previous.trim() && !armed) {
+      button.textContent = "ทับของเดิม?";
+      return true;
+    }
+
+    writeField(target, value);
+    lastFill = { el: target, previous };
+    target.focus();
+    showFilled(`เติม "${what}" ลงช่องที่เลือกแล้ว`);
+    return false;
+  }
+
+  function fillButton(item, what, value) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "fill";
+    button.textContent = what;
+    let armTimer = 0;
+    let armed = false;
+    button.addEventListener("click", () => {
+      clearTimeout(armTimer);
+      armed = fillField(value, what, button, armed);
+      if (armed) {
+        // ปล่อยไว้นานเกินไปแล้วมากดโดนพอดีจะกลายเป็นทับของเดิมโดยไม่ตั้งใจ
+        armTimer = setTimeout(() => {
+          armed = false;
+          button.textContent = what;
+        }, 3000);
+      } else {
+        button.textContent = what;
+      }
+    });
+    return button;
+  }
+
   function card(item) {
     const box = document.createElement("div");
     box.className = "item";
@@ -179,7 +332,21 @@
       }, 1200);
     });
 
-    box.append(title, meta, copyBtn);
+    const fillRow = document.createElement("div");
+    fillRow.className = "fillrow";
+    const fillLabel = document.createElement("span");
+    fillLabel.className = "fill-label";
+    fillLabel.textContent = "เติมลงช่องที่เลือก:";
+    fillRow.append(fillLabel);
+    for (const [what, value] of [
+      ["ชื่อ", item.title],
+      ["หน่วยงาน", item.org],
+      ["รายละเอียด", item.detail],
+    ]) {
+      if (value) fillRow.append(fillButton(item, what, value));
+    }
+
+    box.append(title, meta, fillRow, copyBtn);
     return box;
   }
 

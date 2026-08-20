@@ -166,6 +166,49 @@ project was done by reading `host.shadowRoot` from the page world.
 This is a judgement call, recorded here so it is a decision rather than a
 default.
 
+## Decision 11 — เฟส 3: fill the *focused* field, not a mapped one
+
+The guide's rule 1 said no auto-fill. The user asked for it directly on
+2026-08-20 ("TCASFolio มันใช้ยาก … อยากให้ extension ช่วยเอาข้อมูลลงไปใส่"), so
+rule 1 is superseded for this feature — deliberately, and with rails.
+
+**The mechanism the rule was afraid of is real.** Setting `input.value = "…"` on a
+React-controlled field updates the DOM but not React's state, so the text appears
+on screen and the form submits empty. That is a data-loss bug on a live
+application. The correct technique is the prototype's native setter followed by a
+bubbling `input` event, which React's synthetic listener picks up as real typing:
+
+```js
+Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
+el.dispatchEvent(new Event("input", { bubbles: true }));
+```
+
+Verified against a mock form whose state updates only on `input`: after filling,
+`what submit would send` matched the panel's value exactly, not just the DOM.
+
+**No selectors.** The panel does not know or guess which field is which. It tracks
+the last fillable element the user focused, via a capture-phase `focusin` listener
+on `document`, and writes there. The student picks the field; the extension picks
+nothing. This survives every TCASFolio redeploy, which a selector map would not —
+and the guide itself said phase 3 could not start until someone mapped the live
+form. It turns out it never needed the map.
+
+**The rails, each verified in a browser:**
+- `readOnly`, `disabled`, or `aria-readonly="true"` → refuses and says why. This is
+  the best-effort guard for "never touch verified data"; it is only as good as
+  TCASFolio's own markup, which we cannot inspect from here.
+- `password`, `file`, `checkbox`, `radio`, `hidden`, `submit`, `button`, `image`,
+  `reset`, `range`, `color` are never fill targets.
+- Focusing a non-fillable element **clears** the remembered target, so a fill can
+  never land in a field the student has since navigated away from.
+- A field that already has text requires a second confirming click
+  (`ทับของเดิม?`), which disarms itself after 3 seconds.
+- Every fill keeps the previous value and offers `ย้อนกลับ`.
+- Nothing ever submits the form. No synthetic `Enter`, no `form.submit()`.
+
+`contenteditable` fields go through `document.execCommand("insertText")` instead,
+which is what rich-text editors listen for.
+
 ## Decision 6 — drop `host_permissions`
 
 The guide's target manifest lists both `host_permissions:
