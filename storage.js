@@ -29,8 +29,11 @@
     });
   }
 
+  // ยังไม่เคยตั้งค่า = ย่อไว้ก่อน panel ลอยทับปุ่มของใบสมัครจริงได้
+  // ถ้าจะให้กางตั้งแต่แรก เปลี่ยนค่า default ตรงนี้บรรทัดเดียว
   async function getPanelCollapsed() {
     const data = await chrome.storage.local.get(PANEL_KEY);
+    if (data[PANEL_KEY] === undefined) return true;
     return data[PANEL_KEY] === true;
   }
 

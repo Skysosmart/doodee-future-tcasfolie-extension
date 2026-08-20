@@ -85,13 +85,86 @@ stylesheet's `load` event fires, so there is no flash of unstyled content.
 
 **Why:** TCASFolio is a production React app that ships global CSS resets.
 Without a shadow root its `button {}` and `* {}` rules bleed into the panel
-and the panel's bleed back into the application form. Shadow DOM makes the
-isolation total instead of a specificity arms race that must be re-fought
-after every one of their deploys.
+and the panel's bleed back into the application form.
+
+**Correction (Task 5 review).** An earlier draft of this decision claimed the
+shadow root makes "the isolation total". That is only half true, and the wrong
+half was the one this decision leaned on. Measured in Chromium 151:
+
+- **Bleed *out* is total.** Page `button {}`, `select {}`, and `* {}` rules were
+  all correctly blocked from reaching panel internals, and the panel's own rules
+  never touched the page's elements.
+- **Bleed *in* through the host is not blocked by `:host` alone.** Normal
+  declarations in the outer tree beat normal declarations in `:host` — that is
+  cascade *origin* order, not specificity, so `all: initial` cannot win it. A
+  plain page rule `div { color: red; line-height: 3; margin: 12px }` with no
+  `!important` at all recoloured the panel's text, tripled its line-height, and
+  displaced the whole panel by 12px.
+
+The fix is not more shadow DOM, it is two rules:
+1. Layout properties that must survive (`position`, `top`, `right`, `margin`,
+   `padding`, `z-index`, `display`) carry `!important` on `:host`.
+2. Inherited typography (`font-family`, `font-size`, `line-height`, `color`) is
+   declared on `.panel` — inside the shadow tree, where no page selector can
+   reach — instead of only on `:host`.
+
+Re-measured after the fix: a page stylesheet of
+`* { color: red !important; margin: 12px !important; font-family: 'Comic Sans MS' !important }`
+left the panel at `top: 88px`, `margin: 0`, `position: fixed`, its own colour, and
+its own font. The guarantee now matches the claim.
 
 The host element is appended to `document.documentElement`, not `body`, so a
 transformed `body` cannot create a containing block that breaks
 `position: fixed`.
+
+## Decision 9 — the panel starts collapsed
+
+`Storage.getPanelCollapsed()` returns `true` when the key has never been set,
+and `content.js` initialises `collapsed = true` and calls `applyCollapsed()`
+*synchronously*, before the host is appended, so the first paint is collapsed
+too.
+
+**Why:** the panel is `position: fixed; right: 0; z-index: 2147483647` with a
+300px width and a 70vh cap. Measured with `document.elementFromPoint`, an
+expanded panel returns *itself* for any page control inside that band — the
+click never reaches the control, and nothing on screen explains why. On a
+deadline-bound university application, a dead submit button is a serious
+failure, and we cannot know from here which of TCASFolio's controls sit in that
+band.
+
+Collapsed, the host is 46×42 and the same measurement returns the page's own
+button again. Defaulting to collapsed makes "the panel blocks something" a state
+the student opts into and can immediately undo, rather than the state they are
+dropped into. The stored preference always wins on later visits, so this costs a
+returning user nothing.
+
+The rejected alternatives: dragging (real work, and the position still has to
+start somewhere), a lower `z-index` (loses to the site's own stacking and the
+panel disappears under their header), and shrinking the panel (narrows the
+collision without removing it).
+
+To go back to expanded-by-default, change the one `return true` in
+`storage.js`'s `getPanelCollapsed`.
+
+## Decision 10 — the shadow root stays `mode: "open"`
+
+**Why it was questioned:** an open root lets TCASFolio's own JavaScript read
+`host.shadowRoot` and enumerate the panel — every rendered title, org, type, and
+tag — plus recover the extension's id from the stylesheet href.
+
+**Why it stays open anyway.** Item `detail` — the essay text, the part that
+actually matters — is never in the DOM at all; it lives only in the copy
+handler's closure, so it is not exposed either way. What is exposed is a list of
+portfolio titles the student is in the middle of submitting *to that same site*.
+And `mode: "closed"` is not a real boundary: a page that patches
+`Element.prototype.attachShadow` before `document_idle` defeats it completely, so
+it would buy the appearance of protection rather than protection.
+
+Open also keeps the panel inspectable — every browser-side verification of this
+project was done by reading `host.shadowRoot` from the page world.
+
+This is a judgement call, recorded here so it is a decision rather than a
+default.
 
 ## Decision 6 — drop `host_permissions`
 

@@ -113,14 +113,21 @@ function itemCard(item) {
   const copyBtn = document.createElement("button");
   copyBtn.className = "copy";
   copyBtn.textContent = "คัดลอกรายละเอียด";
+  let resetTimer = 0;
   copyBtn.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(item.detail);
-      copyBtn.textContent = "คัดลอกแล้ว ✓";
-    } catch (error) {
-      copyBtn.textContent = "คัดลอกไม่สำเร็จ";
+    clearTimeout(resetTimer); // กดรัว ๆ อันเก่าต้องไม่มาล้างป้ายของอันใหม่
+    if (!item.detail) {
+      // writeText("") สำเร็จเสมอ แล้วไปล้างของที่ผู้ใช้เพิ่งคัดลอกมาทิ้ง
+      copyBtn.textContent = "ไม่มีรายละเอียดให้คัดลอก";
+    } else {
+      try {
+        await navigator.clipboard.writeText(item.detail);
+        copyBtn.textContent = "คัดลอกแล้ว ✓";
+      } catch (error) {
+        copyBtn.textContent = "คัดลอกไม่สำเร็จ";
+      }
     }
-    setTimeout(() => {
+    resetTimer = setTimeout(() => {
       copyBtn.textContent = "คัดลอกรายละเอียด";
     }, 1200);
   });

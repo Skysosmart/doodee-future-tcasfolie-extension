@@ -1,17 +1,33 @@
 :host {
   all: initial;
-  display: block;
-  position: fixed;
-  top: 88px;
-  right: 0;
-  z-index: 2147483647;
+  /* กฎธรรมดาของหน้าเว็บชนะกฎธรรมดาใน :host เสมอ — เป็นเรื่องของลำดับ cascade
+     ไม่ใช่ specificity ดังนั้น all:initial กันไม่อยู่ ทดสอบแล้วด้วยกฎธรรมดา
+     `div { margin: 12px }` ของหน้าเว็บ ซึ่งดัน panel เลื่อนไปทั้งอัน
+     สิ่งที่ขาดไม่ได้จริง ๆ จึงต้อง !important */
+  display: block !important;
+  position: fixed !important;
+  top: 88px !important;
+  right: 0 !important;
+  bottom: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 2147483647 !important;
+}
+
+/* [hidden] ของเบราว์เซอร์เป็น display:none แบบ UA origin ซึ่งแพ้ display:flex
+   ที่เราเขียนเอง — .hidden = true จึงไม่ทำอะไรเลยถ้าไม่ประกาศทับตรงนี้ */
+[hidden] {
+  display: none !important;
+}
+
+/* ตัวอักษรตั้งที่ .panel ไม่ใช่ :host — css ของหน้าเว็บเอื้อมถึง host ได้
+   แต่เอื้อมเข้ามาใน shadow tree ไม่ได้ ตั้งตรงนี้จึงกันการรั่วเข้าได้จริง */
+.panel {
   font-family: "Mali", "Noto Sans Thai", system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.5;
   color: #e9eaee;
-}
-
-.panel {
   display: flex;
   flex-direction: column;
   width: 300px;
@@ -49,7 +65,18 @@
   cursor: pointer;
 }
 
-.body { padding: 10px; overflow-y: auto; }
+/* overscroll-behavior: เลื่อนสุดรายการแล้วต้องไม่ไปเลื่อนใบสมัครที่อยู่ข้างหลัง */
+.body { padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
+
+.note {
+  margin-bottom: 8px;
+  padding: 7px 9px;
+  background: #2a1d1d;
+  border: 1px solid #6b3535;
+  border-radius: 5px;
+  color: #f0b8b8;
+  font-size: 12px;
+}
 
 .type-filter {
   width: 100%;
