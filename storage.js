@@ -9,11 +9,15 @@
   const ITEMS_KEY = "folioItems";
   const PANEL_KEY = "panelCollapsed";
 
-  async function getItems() {
+  // ย้ายข้อมูลรุ่นเก่าที่ยังไม่มี id — เกิดครั้งเดียวแล้วจบ
+  // panel ส่ง { migrate: false } เพราะถ้าสอง context อ่านพร้อมกันตอนยังไม่มี id
+  // ต่างคนต่างสุ่ม id คนละชุดแล้วเขียนทับกัน ฝั่งที่แพ้จะถือ id ที่ไม่มีอยู่จริง
+  // แก้แล้วได้ของซ้ำ ลบแล้วไม่หาย — ให้ popup เป็นคนย้ายอยู่ที่เดียว
+  async function getItems(options) {
     const data = await chrome.storage.local.get(ITEMS_KEY);
     const { items, changed } = root.Model.normalize(data[ITEMS_KEY]);
-    // ย้ายข้อมูลรุ่นเก่าที่ยังไม่มี id — เกิดครั้งเดียวแล้วจบ
-    if (changed) await chrome.storage.local.set({ [ITEMS_KEY]: items });
+    const mayMigrate = !options || options.migrate !== false;
+    if (changed && mayMigrate) await chrome.storage.local.set({ [ITEMS_KEY]: items });
     return items;
   }
 

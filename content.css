@@ -15,6 +15,12 @@
   z-index: 2147483647 !important;
 }
 
+/* ตอนย่อ ปุ่มเล็ก ๆ นี้ยังกินพื้นที่คลิกอยู่ดี (วัดแล้ว ~46x42)
+   ย้ายลงมากลางขอบขวา ให้พ้นมุมบนขวาซึ่งเป็นที่ของเมนูบัญชี/ปุ่มออกจากระบบ */
+:host(.is-collapsed) {
+  top: 50% !important;
+}
+
 /* [hidden] ของเบราว์เซอร์เป็น display:none แบบ UA origin ซึ่งแพ้ display:flex
    ที่เราเขียนเอง — .hidden = true จึงไม่ทำอะไรเลยถ้าไม่ประกาศทับตรงนี้ */
 [hidden] {
@@ -69,7 +75,7 @@
 .body { padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
 
 .note {
-  margin-bottom: 8px;
+  margin: 0 10px 10px;
   padding: 7px 9px;
   background: #2a1d1d;
   border: 1px solid #6b3535;

@@ -60,6 +60,9 @@ function readForm() {
 
 function resetForm() {
   editingId = null;
+  for (const option of [...el("type").querySelectorAll("[data-foreign]")]) {
+    option.remove();
+  }
   el("type").selectedIndex = 0;
   for (const id of ["title", "org", "tags", "detail"]) el(id).value = "";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
@@ -69,6 +72,15 @@ function resetForm() {
 
 function startEditing(item) {
   editingId = item.id;
+  // ของที่ import มาหรือแก้มือมาอาจมีประเภทที่ไม่อยู่ในลิสต์
+  // ตั้ง value เฉย ๆ จะได้ selectedIndex -1 แล้วบันทึกกลับเป็นค่าว่าง
+  // ซึ่งแปลว่าผลงานชิ้นนั้นหลุดจากตัวกรองทุกอันโดยไม่มีใครรู้
+  if (item.type && !Model.TYPES.includes(item.type)) {
+    const option = document.createElement("option");
+    option.textContent = item.type;
+    option.dataset.foreign = "true";
+    el("type").appendChild(option);
+  }
   el("type").value = item.type;
   el("title").value = item.title;
   el("org").value = item.org;
@@ -167,7 +179,20 @@ function itemCard(item) {
 }
 
 async function render(known) {
-  const items = known || (await Storage.getItems());
+  let items;
+  try {
+    items = known || (await Storage.getItems());
+  } catch (error) {
+    // อ่านไม่ได้ ห้ามวาดว่า "ยังไม่มีข้อมูล" เด็ดขาด — ผู้ใช้จะนึกว่าของหายทั้งคลัง
+    // แล้วอาจไปเริ่มพิมพ์ใหม่ทับของเดิมที่จริง ๆ ยังอยู่
+    showStatus(`อ่านคลังผลงานไม่ได้: ${error.message}`, true);
+    el("count").textContent = "?";
+    el("list").replaceChildren();
+    el("empty").textContent = "อ่านข้อมูลไม่ได้ — ยังไม่ต้องพิมพ์ใหม่ ลองปิดแล้วเปิดใหม่ก่อน";
+    el("empty").style.display = "block";
+    return;
+  }
+  el("empty").textContent = "ยังไม่มีข้อมูล";
 
   // ชิ้นที่กำลังแก้อยู่ถูกลบไปจากที่อื่น — ต้องเลิกแก้
   // ไม่งั้นกด "อัปเดต" แล้ว upsert จะสร้างมันกลับขึ้นมาใหม่เงียบ ๆ
@@ -210,19 +235,24 @@ el("saveBtn").addEventListener("click", async () => {
 el("cancelBtn").addEventListener("click", () => resetForm());
 
 el("exportBtn").addEventListener("click", async () => {
-  const items = await Storage.getItems();
-  const text = JSON.stringify(Model.toExport(items, Date.now()), null, 2);
-  const blob = new Blob([text], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  try {
+    const items = await Storage.getItems();
+    const text = JSON.stringify(Model.toExport(items, Date.now()), null, 2);
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `doodee-future-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `doodee-future-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
 
-  // ปล่อยทิ้งหลังดาวน์โหลดเริ่มแล้ว
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-  showStatus(`ส่งออก ${items.length} รายการแล้ว`);
+    // ปล่อยทิ้งหลังดาวน์โหลดเริ่มแล้ว
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    showStatus(`ส่งออก ${items.length} รายการแล้ว`);
+  } catch (error) {
+    // นี่คือทางสำรองข้อมูล ถ้ามันเงียบ ผู้ใช้จะเชื่อว่า backup แล้วทั้งที่ไม่มีไฟล์
+    showStatus(`ส่งออกไม่สำเร็จ: ${error.message}`, true);
+  }
 });
 
 el("importBtn").addEventListener("click", () => el("importFile").click());
@@ -235,16 +265,19 @@ el("importFile").addEventListener("change", async (event) => {
     const incoming = Model.parseImport(await file.text());
     let added = 0;
     let updated = 0;
+    let redone = 0;
     // ผ่านคิวเดียวกับ save/delete กันเขียนชนกัน
     const ok = await mutate((items) => {
       // รวมแบบ upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ backup ต้องไม่หาย
       const result = Model.mergeImport(items, incoming);
       added = result.added;
       updated = result.updated;
+      redone = result.redone;
       return result.items;
     });
     if (ok) {
-      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}`);
+      const extra = redone ? ` · id ซ้ำในไฟล์ ${redone} (แยกเป็นคนละชิ้นให้แล้ว)` : "";
+      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}${extra}`);
       render();
     }
   } catch (error) {

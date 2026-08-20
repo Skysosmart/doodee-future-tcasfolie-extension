@@ -19,6 +19,7 @@
   // (วัดแล้ว: elementFromPoint บนปุ่มชิดขอบขวาคืน host ตัวนี้ ไม่ใช่ปุ่ม)
   // ถ้าผู้ใช้เคยกางไว้ ค่าใน storage จะมากางให้เองตอน init
   let collapsed = true;
+  let userToggled = false;
 
   const host = document.createElement("div");
   host.id = HOST_ID;
@@ -49,10 +50,12 @@
   toggle.type = "button";
   toggle.className = "toggle";
   toggle.addEventListener("click", async () => {
+    userToggled = true; // init ที่ยังค้างอยู่ต้องไม่ย้อนสิ่งที่ผู้ใช้เพิ่งกด
     collapsed = !collapsed;
     applyCollapsed();
     try {
       await Storage.setPanelCollapsed(collapsed);
+      clearNote(); // สำเร็จแล้วต้องไม่มีคำเตือนเก่าค้างอยู่
     } catch (error) {
       // เช่น extension ถูก reload ทั้งที่หน้ายังเปิดอยู่ — สถานะบนจอกับที่บันทึกไว้
       // จะไม่ตรงกัน ปล่อยเงียบไม่ได้ ผู้ใช้ต้องรู้ว่ามันจะไม่จำ
@@ -66,6 +69,8 @@
   body.className = "body";
 
   // ที่เดียวของ panel ที่บอกได้ว่ามีอะไรพัง — storage ล้มเงียบ ๆ ไม่ได้
+  // ต้องอยู่นอก .body เพราะตอนย่อ .body เป็น display:none ทั้งก้อน
+  // ถ้าเอาไว้ข้างใน ข้อความจะโผล่เฉพาะตอนกาง ซึ่งคือตอนที่ไม่ค่อยต้องใช้
   const note = document.createElement("div");
   note.className = "note";
   note.hidden = true;
@@ -73,6 +78,11 @@
   function showNote(message) {
     note.textContent = message;
     note.hidden = false;
+  }
+
+  function clearNote() {
+    note.textContent = "";
+    note.hidden = true;
   }
 
   const typeSelect = document.createElement("select");
@@ -98,8 +108,8 @@
   const list = document.createElement("div");
   list.className = "list";
 
-  body.append(note, typeSelect, tagBar, list);
-  root.append(header, body);
+  body.append(typeSelect, tagBar, list);
+  root.append(header, note, body);
   shadow.append(sheet, root);
 
   function applyCollapsed() {
@@ -108,6 +118,9 @@
     toggle.title = collapsed ? "ขยายคลังผลงาน" : "ย่อคลังผลงาน";
     toggle.setAttribute("aria-expanded", String(!collapsed));
     root.classList.toggle("is-collapsed", collapsed);
+    // ย้าย host ด้วย ไม่ใช่แค่ .panel — ตอนย่อจะได้ไปนั่งกลางขอบขวา
+    // ห่างจากมุมบนขวาที่เมนูบัญชี/ปุ่มออกจากระบบของเว็บชอบอยู่
+    host.classList.toggle("is-collapsed", collapsed);
   }
 
   function renderTagBar() {
@@ -197,22 +210,32 @@
 
   // ต่อกับ documentElement ไม่ใช่ body เผื่อ body มี transform
   // ซึ่งจะกลายเป็น containing block แล้วทำให้ position:fixed เพี้ยน
+  // เหตุการณ์จาก shadow จะ retarget มาเป็น host แล้ว bubble ต่อไปถึง document
+  // ของเว็บ ซึ่งอาจมี handler ปิดเมนู/ตรวจฟอร์มรออยู่ — กดปุ่มคัดลอกของเราแล้ว
+  // ไปสั่งงานหน้าเว็บเขาไม่ได้ เราเป็นแค่ผู้อาศัย
+  // กันได้เฉพาะ handler ฝั่ง bubble (ซึ่งเป็นแบบที่ใช้กันทั่วไป) — วัดแล้วว่าเงียบสนิท
+  // ส่วน capture ที่ผูกไว้ที่ document กันไม่ได้เลย เพราะ capture วิ่งจากบนลงล่าง
+  // ถึง document ก่อนจะมาถึง host ของเรา ไม่มีจังหวะให้หยุด
+  for (const type of ["pointerdown", "mousedown", "click", "keydown", "focusin"]) {
+    host.addEventListener(type, (event) => event.stopPropagation());
+  }
+
   applyCollapsed(); // ย่อไว้ตั้งแต่ก่อนแปะ กันแวบกางทับฟอร์มระหว่างรอ storage
   document.documentElement.appendChild(host);
 
-  Storage.onItemsChanged(refresh);
-
   (async () => {
     try {
+      Storage.onItemsChanged(refresh);
       collapsed = await Storage.getPanelCollapsed();
-      applyCollapsed();
-      refresh(await Storage.getItems());
+      // ผู้ใช้กดย่อ/กางไปแล้วระหว่างรออ่าน ค่าเก่าที่เพิ่งอ่านมาถือว่าตกยุค
+      if (!userToggled) applyCollapsed();
+      refresh(await Storage.getItems({ migrate: false }));
     } catch (error) {
       // อ่าน storage ไม่ได้ ห้ามทิ้งกล่องดำเปล่า ๆ ค้างบนใบสมัครจริง
       // ต้องกางให้เห็นข้อความ ไม่งั้นผู้ใช้ไม่มีทางรู้ว่าเกิดอะไรขึ้น
       collapsed = false;
       applyCollapsed();
-      showNote(`อ่านคลังผลงานไม่ได้: ${error.message}`);
+      showNote(`อ่านคลังผลงานไม่ได้: ${error.message} — ลองโหลดหน้านี้ใหม่`);
     }
   })();
 })();

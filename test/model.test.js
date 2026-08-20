@@ -142,3 +142,35 @@ test("mergeImport upserts and never drops entries missing from the backup", () =
   assert.equal(items[0].title, "backup 1", "the backup wins for ids it carries");
   assert.equal(items[1].title, "mine 2", "an entry absent from the backup survives");
 });
+
+test("mergeImport re-ids entries that share an id inside one file", () => {
+  // copy-paste ทั้งบล็อกในไฟล์ backup คือวิธีโคลนผลงานด้วยมือที่คนทำกันจริง
+  // ถ้า upsert ทับกันเองจะเหลือชิ้นเดียว แปลว่าตั้งใจเพิ่มแล้วกลับได้ของหาย
+  const incoming = [
+    M.makeItem({ title: "ต้นฉบับ" }, { id: "dup-1", now: 0 }),
+    M.makeItem({ title: "ที่ copy มา" }, { id: "dup-1", now: 0 }),
+  ];
+
+  const { items, added, updated, redone } = M.mergeImport([], incoming);
+
+  assert.equal(items.length, 2, "ทั้งสองชิ้นต้องรอด ไม่ใช่ทับกันเอง");
+  assert.equal(redone, 1);
+  assert.equal(added, 2);
+  assert.equal(updated, 0);
+  assert.notEqual(items[0].id, items[1].id);
+  assert.deepEqual(
+    items.map((i) => i.title),
+    ["ต้นฉบับ", "ที่ copy มา"],
+  );
+});
+
+test("parseImport refuses a file that carries no items", () => {
+  // เลือกไฟล์ผิดแล้วขึ้นเขียวว่าสำเร็จ คือทางที่ผู้ใช้จะเชื่อว่า restore แล้ว
+  assert.throws(() => M.parseImport("[]"), /ไม่มีผลงาน/);
+  assert.throws(
+    () => M.parseImport(JSON.stringify({ app: "doodee-future", items: [] })),
+    /ไม่มีผลงาน/,
+  );
+  // ของที่มีจริงต้องยังผ่านเหมือนเดิม
+  assert.equal(M.parseImport(JSON.stringify([{ title: "ยังอ่านได้" }])).length, 1);
+});

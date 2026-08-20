@@ -128,7 +128,10 @@
         ? data.items
         : null;
     if (!raw) throw new Error("ไม่พบรายการผลงานในไฟล์นี้");
-    return normalize(raw).items;
+    const items = normalize(raw).items;
+    // ไฟล์ที่ไม่มีผลงานเลยต้องไม่ขึ้นว่าสำเร็จ ผู้ใช้เลือกไฟล์ผิดจะได้รู้
+    if (!items.length) throw new Error("ไฟล์นี้ไม่มีผลงานอยู่เลย");
+    return items;
   }
 
   // upsert เท่านั้น ห้ามแทนที่ทั้งก้อน
@@ -137,12 +140,21 @@
     let items = current;
     let added = 0;
     let updated = 0;
-    for (const item of incoming) {
+    let redone = 0;
+    // id ซ้ำ "ภายในไฟล์เดียวกัน" เกิดได้ง่ายมากจากการ copy-paste ทั้งบล็อกในไฟล์
+    // backup ถ้าปล่อยไว้ upsert จะเขียนทับกันเองแล้วเหลือชิ้นเดียวแบบเงียบ ๆ
+    // — ตั้งใจจะโคลนกลับกลายเป็นของหาย จึงแจก id ใหม่ให้ตัวที่ซ้ำแทน
+    const seen = new Set();
+    for (const raw of incoming) {
+      const item = seen.has(raw.id) ? { ...raw, id: newId() } : raw;
+      if (seen.has(raw.id)) redone += 1;
+      seen.add(raw.id);
+
       if (items.some((entry) => entry.id === item.id)) updated += 1;
       else added += 1;
       items = upsert(items, item);
     }
-    return { items, added, updated };
+    return { items, added, updated, redone };
   }
 
   root.Model = {

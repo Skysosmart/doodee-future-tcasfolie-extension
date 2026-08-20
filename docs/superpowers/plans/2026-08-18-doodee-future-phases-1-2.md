@@ -494,7 +494,7 @@ git commit -m "feat: add chrome.storage adapter over the model"
 
 **Interfaces:**
 - Consumes: `Model.TYPES`, `Model.makeItem`, `Model.upsert`, `Model.remove`, `Model.formatTags`; `Storage.getItems`, `Storage.setItems`, `Storage.onItemsChanged`.
-- Produces: nothing other tasks consume. Task 4 appends to the same `popup.js` and reuses its `el()`, `showStatus()`, and `render()` helpers, whose signatures are fixed here: `el(id: string): HTMLElement`, `showStatus(message: string, isError?: boolean): void`, `render(known?: Item[]): Promise<void>`.
+- Produces: nothing other tasks consume. Task 4 appends to the same `popup.js` and reuses its `el()`, `showStatus()`, and `render()` helpers, whose signatures are fixed here: `el(id: string): HTMLElement`, `showStatus(message: string, isError?: boolean): void`, `render(known?: Item[]): Promise<void>`, `mutate(change: (items: Item[]) => Item[] | null, okMessage?: string): Promise<boolean>` — every write to `folioItems` goes through `mutate`, which serialises read-modify-write cycles and surfaces storage failures as a red status.
 
 - [ ] **Step 1: Replace `popup.html`**
 
@@ -702,6 +702,27 @@ function showStatus(message, isError) {
   }, 4000);
 }
 
+// เขียนทีละคิว — สองคลิกรัว ๆ จะได้ไม่อ่านค่าเดิมพร้อมกันแล้วเขียนทับกัน
+let writeQueue = Promise.resolve();
+
+async function mutate(change, okMessage) {
+  const run = writeQueue.then(async () => {
+    const items = await Storage.getItems();
+    const next = change(items);
+    if (next) await Storage.setItems(next);
+  });
+  writeQueue = run.catch(() => {}); // คิวต้องไม่ค้างถ้าอันก่อนหน้าพัง
+  try {
+    await run;
+    if (okMessage) showStatus(okMessage);
+    return true;
+  } catch (error) {
+    // storage พังเงียบ ๆ ไม่ได้ ผู้ใช้ต้องรู้ว่ากดแล้วไม่ติด
+    showStatus(`ทำรายการไม่สำเร็จ: ${error.message}`, true);
+    return false;
+  }
+}
+
 function fillTypeOptions() {
   const select = el("type");
   for (const type of Model.TYPES) {
@@ -811,11 +832,10 @@ function itemCard(item) {
     }
     clearTimeout(armTimer);
     // ลบด้วย id ไม่ใช่ตำแหน่งในลิสต์ — ตำแหน่งเปลี่ยนได้ระหว่างที่ popup เปิดอยู่
-    const current = await Storage.getItems();
-    await Storage.setItems(Model.remove(current, item.id));
-    if (editingId === item.id) resetForm();
-    showStatus("ลบแล้ว");
-    render();
+    const ok = await mutate((items) => Model.remove(items, item.id), "ลบแล้ว");
+    // ล้างฟอร์มเฉพาะตอนลบสำเร็จ — ลบไม่ติดแล้วล้าง ผู้ใช้จะเสียของที่พิมพ์ค้างไว้
+    if (ok && editingId === item.id) resetForm();
+    render(); // วาดใหม่เสมอ ปุ่มจะได้ไม่ค้างอยู่ที่ "แน่ใจ?"
   });
 
   actions.append(copyBtn, editBtn, delBtn);
@@ -825,6 +845,14 @@ function itemCard(item) {
 
 async function render(known) {
   const items = known || (await Storage.getItems());
+
+  // ชิ้นที่กำลังแก้อยู่ถูกลบไปจากที่อื่น — ต้องเลิกแก้
+  // ไม่งั้นกด "อัปเดต" แล้ว upsert จะสร้างมันกลับขึ้นมาใหม่เงียบ ๆ
+  if (editingId && !items.some((entry) => entry.id === editingId)) {
+    resetForm();
+    showStatus("ผลงานที่กำลังแก้ถูกลบไปแล้ว", true);
+  }
+
   el("count").textContent = items.length;
   el("empty").style.display = items.length ? "none" : "block";
   el("list").replaceChildren(...items.map(itemCard));
@@ -838,16 +866,20 @@ el("saveBtn").addEventListener("click", async () => {
     return;
   }
 
-  const items = await Storage.getItems();
-  const existing = editingId ? items.find((i) => i.id === editingId) : null;
-  const item = Model.makeItem(fields, {
-    id: editingId || undefined,
-    // แก้ไขแล้ววันที่สร้างต้องไม่เปลี่ยน
-    now: existing ? existing.createdAt : Date.now(),
-  });
+  const wasEditing = editingId;
+  const ok = await mutate((items) => {
+    const existing = wasEditing ? items.find((i) => i.id === wasEditing) : null;
+    return Model.upsert(
+      items,
+      Model.makeItem(fields, {
+        id: wasEditing || undefined,
+        // แก้ไขแล้ววันที่สร้างต้องไม่เปลี่ยน
+        now: existing ? existing.createdAt : Date.now(),
+      }),
+    );
+  }, wasEditing ? "อัปเดตแล้ว" : "บันทึกแล้ว");
 
-  await Storage.setItems(Model.upsert(items, item));
-  showStatus(editingId ? "อัปเดตแล้ว" : "บันทึกแล้ว");
+  if (!ok) return; // เขียนไม่สำเร็จ อย่าล้างฟอร์ม ผู้ใช้จะได้กดใหม่ได้
   resetForm();
   render();
 });
@@ -928,12 +960,20 @@ el("importFile").addEventListener("change", async (event) => {
 
   try {
     const incoming = Model.parseImport(await file.text());
-    const current = await Storage.getItems();
-    // รวมแบบ upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ backup ต้องไม่หาย
-    const { items, added, updated } = Model.mergeImport(current, incoming);
-    await Storage.setItems(items);
-    showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}`);
-    render();
+    let added = 0;
+    let updated = 0;
+    // ผ่านคิวเดียวกับ save/delete กันเขียนชนกัน
+    const ok = await mutate((items) => {
+      // รวมแบบ upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ backup ต้องไม่หาย
+      const result = Model.mergeImport(items, incoming);
+      added = result.added;
+      updated = result.updated;
+      return result.items;
+    });
+    if (ok) {
+      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}`);
+      render();
+    }
   } catch (error) {
     showStatus(error.message, true);
   } finally {

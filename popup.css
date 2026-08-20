@@ -118,3 +118,9 @@ hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
 .item-actions .del { color: var(--danger); }
 
 #empty { color: var(--dim); font-size: 13px; text-align: center; padding: 16px 0; }
+
+/* [hidden] ของเบราว์เซอร์เป็น UA origin ซึ่งแพ้ display ที่เราเขียนเอง
+   วันนี้ยังไม่มีกฎไหนชน แต่เพิ่ม display ให้ .ghost เมื่อไหร่ปุ่มยกเลิกจะโผล่เอง */
+[hidden] {
+  display: none !important;
+}
