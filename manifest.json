@@ -7,5 +7,18 @@
   "action": {
     "default_popup": "popup.html",
     "default_title": "Doodee future"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://student.mytcas.com/*"],
+      "js": ["model.js", "storage.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.css"],
+      "matches": ["https://student.mytcas.com/*"]
+    }
+  ]
 }
