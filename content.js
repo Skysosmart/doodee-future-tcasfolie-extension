@@ -323,15 +323,24 @@
       // ไต่ขึ้นจากช่องหัวข้อจนเจอกล่องที่มีช่องว่างมากกว่าหนึ่ง
       // หยุดที่กล่องแรกที่เจอไม่ได้ — ของ TCASFolio หัวข้ออยู่ใน .free__item
       // ส่วนรายละเอียดเป็นพี่น้องข้างนอก กล่องแรกจึงมีแค่หัวข้อช่องเดียว
+      //
+      // แต่ห้ามไต่ทะลุขอบบล็อกเด็ดขาด: ถ้ากล่องนั้นมีช่องหัวข้ออื่นอยู่ด้วย
+      // แปลว่าเลยไปในอาณาเขตของผลงานชิ้นอื่นแล้ว
+      // (เคยพลาดมาแล้วบนหน้าจริง — รายละเอียดของทุกชิ้นวิ่งไปลงบล็อกแรกหมด
+      //  เพราะบล็อกแรกมีช่องรายละเอียดว่างอยู่ ทับกันไปเรื่อย ๆ)
       let node = titleEl.parentElement;
       for (let depth = 0; depth < 6 && node && node !== document.body; depth += 1) {
         const inside = empty.filter((el) => node.contains(el));
+        const titlesInside = inside.filter((el) => guessKind(el) === "title");
+        if (titlesInside.length > 1) break; // ข้ามเขตแล้ว ใช้ขอบเขตเดิมที่แคบกว่า
         if (inside.length > 1) {
           pool = inside;
           break;
         }
         node = node.parentElement;
       }
+      // ไม่เจอกล่องที่ปลอดภัย — เติมแค่หัวข้อ ดีกว่าไปเขียนทับของชิ้นอื่น
+      if (pool === empty) pool = [titleEl];
     }
 
     const used = new Set();
