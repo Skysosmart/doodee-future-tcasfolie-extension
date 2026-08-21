@@ -76,16 +76,36 @@
   note.hidden = true;
 
   const noteText = document.createElement("span");
+
   const undoBtn = document.createElement("button");
   undoBtn.type = "button";
   undoBtn.className = "undo";
   undoBtn.textContent = "ย้อนกลับ";
   undoBtn.hidden = true;
-  note.append(noteText, undoBtn);
+
+  // เขียนลงใบสมัครจริงต้องผ่านการยืนยันเสมอ ห้ามเติมทันทีที่กด
+  const confirmBtn = document.createElement("button");
+  confirmBtn.type = "button";
+  confirmBtn.className = "confirm";
+  confirmBtn.textContent = "ยืนยันเติม";
+  confirmBtn.hidden = true;
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "cancel";
+  cancelBtn.textContent = "ยกเลิก";
+  cancelBtn.hidden = true;
+
+  const noteActions = document.createElement("div");
+  noteActions.className = "note-actions";
+  noteActions.append(confirmBtn, cancelBtn, undoBtn);
+  note.append(noteText, noteActions);
 
   function showNote(message) {
     noteText.textContent = message;
     undoBtn.hidden = true;
+    confirmBtn.hidden = true;
+    cancelBtn.hidden = true;
     note.classList.remove("is-ok");
     note.hidden = false;
   }
@@ -94,13 +114,17 @@
   function showFilled(message) {
     noteText.textContent = message;
     undoBtn.hidden = false;
+    confirmBtn.hidden = true;
+    cancelBtn.hidden = true;
     note.classList.add("is-ok");
     note.hidden = false;
   }
 
   function clearNote() {
-    noteText.textContent = "";
+    noteText.replaceChildren();
     undoBtn.hidden = true;
+    confirmBtn.hidden = true;
+    cancelBtn.hidden = true;
     note.classList.remove("is-ok");
     note.hidden = true;
   }
@@ -179,7 +203,147 @@
   ]);
 
   let lastField = null; // ช่องล่าสุดในหน้าเว็บที่ผู้ใช้คลิก (ไม่ใช่ของ panel)
-  let lastFill = null; // { el, previous } สำหรับปุ่มย้อนกลับ
+  let lastFill = []; // [{ el, previous }] สำหรับปุ่มย้อนกลับ รองรับหลายช่องพร้อมกัน
+  let pendingPlan = null; // แผนที่รอผู้ใช้ยืนยันก่อนเขียนลงฟอร์มจริง
+
+  // คำที่ใช้เดาว่าช่องนั้นคือช่องอะไร — ดูจาก label/placeholder/name/id
+  // ไม่ผูกกับ selector ของเว็บ เขา deploy เปลี่ยนโครงสร้างก็ยังจับคู่ได้
+  const FIELD_HINTS = [
+    ["title", ["ชื่อผลงาน", "ชื่อรางวัล", "ชื่อโครงงาน", "ชื่อกิจกรรม", "ชื่อหลักสูตร",
+               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject"]],
+    ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
+             "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
+             "provider", "agency", "school"]],
+    ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
+                "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
+                "essay", "reason"]],
+    ["year", ["ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา", "year", "date", "เมื่อ"]],
+  ];
+
+  // ทุกแหล่งที่บอกได้ว่าช่องนี้คือช่องอะไร — ใช้จับคู่
+  function labelSources(el) {
+    const wrap = el.closest("label");
+    return [
+      el.labels && el.labels[0] ? el.labels[0].textContent : "",
+      el.getAttribute("aria-label") || "",
+      el.placeholder || "",
+      wrap ? wrap.textContent : "",
+      el.name || "",
+      el.id || "",
+    ].map((t) => t.replace(/\s+/g, " ").trim());
+  }
+
+  // ชื่อที่เอาไปโชว์ให้คนอ่าน — เอาแหล่งแรกที่อ่านรู้เรื่อง ไม่ใช่ต่อกันทุกแหล่ง
+  function fieldLabel(el) {
+    return labelSources(el).find((t) => t.length > 1) || "";
+  }
+
+  function isVisible(el) {
+    if (!el.getClientRects().length) return false;
+    const cs = getComputedStyle(el);
+    return cs.visibility !== "hidden" && cs.display !== "none";
+  }
+
+  // ช่องทั้งหมดในหน้าที่เติมได้จริง ๆ เรียงตามลำดับที่ปรากฏบนหน้า
+  function candidateFields() {
+    const all = [...document.querySelectorAll("input, textarea, [contenteditable=true]")];
+    return all.filter(
+      (el) => !host.contains(el) && el !== host && isFillable(el) && !fieldProblem(el) && isVisible(el),
+    );
+  }
+
+  function guessKind(el) {
+    const haystack = labelSources(el).join(" ").toLowerCase();
+    for (const [kind, words] of FIELD_HINTS) {
+      for (const w of words) {
+        if (haystack.includes(w.toLowerCase())) return kind;
+      }
+    }
+    // ไม่มีคำใบ้เลย — ช่องยาว ๆ เดาว่าเป็นรายละเอียด อย่างอื่นไม่เดา
+    return el.tagName === "TEXTAREA" || el.isContentEditable ? "detail" : "";
+  }
+
+  function yearFrom(text) {
+    const m = String(text).match(/(?:25|26|19|20)\d{2}/);
+    return m ? m[0] : "";
+  }
+
+  // จับคู่ผลงานกับช่องในฟอร์ม — แต่ละชนิดเติมช่องเดียว ช่องแรกที่เข้าเค้าที่สุด
+  function buildPlan(item) {
+    const values = {
+      title: item.title,
+      org: item.org,
+      detail: item.detail,
+      year: yearFrom(item.org),
+    };
+    const used = new Set();
+    const plan = [];
+    for (const el of candidateFields()) {
+      const kind = guessKind(el);
+      if (!kind || used.has(kind) || !values[kind]) continue;
+      used.add(kind);
+      plan.push({
+        el,
+        kind,
+        value: values[kind],
+        previous: readField(el),
+        label: fieldLabel(el).slice(0, 34) || "(ช่องไม่มีชื่อ)",
+      });
+    }
+    return plan;
+  }
+
+  const KIND_TH = { title: "ชื่อ", org: "หน่วยงาน", detail: "รายละเอียด", year: "ปี" };
+
+  function showPlan(plan) {
+    pendingPlan = plan;
+    clearNote();
+    noteText.textContent = "";
+
+    const head = document.createElement("div");
+    head.className = "plan-head";
+    head.textContent = `จะเติม ${plan.length} ช่อง — ตรวจก่อนกดยืนยัน`;
+    noteText.append(head);
+
+    for (const step of plan) {
+      const row = document.createElement("div");
+      row.className = "plan-row";
+      const tag = document.createElement("span");
+      tag.className = "plan-kind";
+      tag.textContent = KIND_TH[step.kind];
+      const where = document.createElement("span");
+      where.textContent = ` → «${step.label}»`;
+      row.append(tag, where);
+      if (step.previous.trim()) {
+        const warn = document.createElement("span");
+        warn.className = "plan-warn";
+        warn.textContent = " ทับของเดิม";
+        row.append(warn);
+      }
+      noteText.append(row);
+    }
+
+    confirmBtn.hidden = false;
+    cancelBtn.hidden = false;
+    undoBtn.hidden = true;
+    note.classList.remove("is-ok");
+    note.hidden = false;
+  }
+
+  function applyPlan(plan) {
+    const done = [];
+    for (const step of plan) {
+      if (!step.el.isConnected) continue;
+      writeField(step.el, step.value);
+      done.push({ el: step.el, previous: step.previous });
+    }
+    lastFill = done;
+    pendingPlan = null;
+    const overwrote = plan.filter((s) => s.previous.trim()).length;
+    showFilled(
+      `เติมแล้ว ${done.length} ช่อง` + (overwrote ? ` (ทับของเดิม ${overwrote})` : "") + " — ยังไม่ได้กดบันทึก",
+    );
+  }
 
   function isFillable(el) {
     if (!el || el === host) return false;
@@ -241,13 +405,23 @@
   }
 
   undoBtn.addEventListener("click", () => {
-    if (!lastFill || !lastFill.el.isConnected) {
-      showNote("ย้อนกลับไม่ได้แล้ว ช่องนั้นไม่อยู่บนหน้านี้แล้ว");
+    const alive = lastFill.filter((f) => f.el.isConnected);
+    if (!alive.length) {
+      showNote("ย้อนกลับไม่ได้แล้ว ช่องพวกนั้นไม่อยู่บนหน้านี้แล้ว");
       return;
     }
-    writeField(lastFill.el, lastFill.previous);
-    lastFill.el.focus();
-    lastFill = null;
+    for (const f of alive) writeField(f.el, f.previous);
+    alive[0].el.focus();
+    lastFill = [];
+    clearNote();
+  });
+
+  confirmBtn.addEventListener("click", () => {
+    if (pendingPlan) applyPlan(pendingPlan);
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    pendingPlan = null;
     clearNote();
   });
 
@@ -267,7 +441,7 @@
     }
 
     writeField(target, value);
-    lastFill = { el: target, previous };
+    lastFill = [{ el: target, previous }];
     target.focus();
     showFilled(`เติม "${what}" ลงช่องที่เลือกแล้ว`);
     return false;
@@ -345,6 +519,20 @@
     ]) {
       if (value) fillRow.append(fillButton(item, what, value));
     }
+
+    const allBtn = document.createElement("button");
+    allBtn.type = "button";
+    allBtn.className = "fill fill-all";
+    allBtn.textContent = "เติมทั้งฟอร์ม";
+    allBtn.addEventListener("click", () => {
+      const plan = buildPlan(item);
+      if (!plan.length) {
+        showNote("ไม่เจอช่องที่เติมได้บนหน้านี้ — เปิดฟอร์มเพิ่มผลงานก่อน แล้วค่อยกด");
+        return;
+      }
+      showPlan(plan); // ยังไม่เขียนอะไรทั้งนั้น รอกดยืนยันก่อน
+    });
+    fillRow.append(allBtn);
 
     box.append(title, meta, fillRow, copyBtn);
     return box;
