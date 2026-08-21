@@ -210,32 +210,58 @@
   // ไม่ผูกกับ selector ของเว็บ เขา deploy เปลี่ยนโครงสร้างก็ยังจับคู่ได้
   const FIELD_HINTS = [
     ["title", ["ชื่อผลงาน", "ชื่อรางวัล", "ชื่อโครงงาน", "ชื่อกิจกรรม", "ชื่อหลักสูตร",
-               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject"]],
+               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject",
+               "free__title"]],
     ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
              "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
              "provider", "agency", "school"]],
     ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
                 "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
-                "essay", "reason"]],
-    ["year", ["ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา", "year", "date", "เมื่อ"]],
+                "essay", "reason", "free__body"]],
+    ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
+              "year", "date", "เมื่อ"]],
   ];
 
   // ทุกแหล่งที่บอกได้ว่าช่องนี้คือช่องอะไร — ใช้จับคู่
+  // ช่องของ TCASFolio เป็น contenteditable div ซึ่งไม่มี .placeholder แบบ input
+  // ต้องอ่านจาก attribute และคลาส (free__title / free__body) แทน
+  // ฟอร์มจริงของ TCASFolio วางข้อความกำกับไว้เป็น element แยกเหนือช่อง
+  // ไม่ได้ผูกด้วย <label for> — ถ้าดูแค่ label/aria จะได้ค่าว่างและจับคู่ไม่ได้เลย
+  // จึงต้องไต่ขึ้นไปหาข้อความสั้น ๆ ที่อยู่ก่อนหน้าช่องนั้น
+  function nearbyLabel(el) {
+    let node = el;
+    for (let depth = 0; depth < 3 && node; depth += 1) {
+      let sib = node.previousElementSibling;
+      while (sib) {
+        const text = (sib.textContent || "").replace(/\s+/g, " ").trim();
+        // สั้นพอที่จะเป็นชื่อช่อง ไม่ใช่ย่อหน้าเนื้อหา
+        if (text && text.length <= 60) return text;
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    return "";
+  }
+
   function labelSources(el) {
     const wrap = el.closest("label");
+    const attr = (n) => el.getAttribute(n) || "";
     return [
       el.labels && el.labels[0] ? el.labels[0].textContent : "",
-      el.getAttribute("aria-label") || "",
-      el.placeholder || "",
+      attr("aria-label"),
+      el.placeholder || attr("placeholder") || attr("data-placeholder") || attr("aria-placeholder"),
       wrap ? wrap.textContent : "",
       el.name || "",
       el.id || "",
-    ].map((t) => t.replace(/\s+/g, " ").trim());
+      (el.className || "").toString(),
+      nearbyLabel(el),
+    ].map((t) => String(t).replace(/\s+/g, " ").trim());
   }
 
   // ชื่อที่เอาไปโชว์ให้คนอ่าน — เอาแหล่งแรกที่อ่านรู้เรื่อง ไม่ใช่ต่อกันทุกแหล่ง
   function fieldLabel(el) {
-    return labelSources(el).find((t) => t.length > 1) || "";
+    const [byLabel, aria, ph, wrap, name, id, cls, near] = labelSources(el);
+    return byLabel || aria || ph || wrap || near || name || id || cls || "";
   }
 
   function isVisible(el) {
@@ -246,7 +272,10 @@
 
   // ช่องทั้งหมดในหน้าที่เติมได้จริง ๆ เรียงตามลำดับที่ปรากฏบนหน้า
   function candidateFields() {
-    const all = [...document.querySelectorAll("input, textarea, [contenteditable=true]")];
+    // ต้องเป็น [contenteditable] เปล่า ๆ ไม่ใช่ [contenteditable=true]
+    // TCASFolio เขียน attribute เป็นค่าว่าง (contenteditable="") ซึ่งมีผลเป็น true
+    // แต่ selector ที่เจาะจงค่าจะจับไม่ได้ — กรองจริงด้วย el.isContentEditable ใน isFillable
+    const all = [...document.querySelectorAll("input, textarea, [contenteditable]")];
     return all.filter(
       (el) => !host.contains(el) && el !== host && isFillable(el) && !fieldProblem(el) && isVisible(el),
     );
@@ -268,7 +297,14 @@
     return m ? m[0] : "";
   }
 
-  // จับคู่ผลงานกับช่องในฟอร์ม — แต่ละชนิดเติมช่องเดียว ช่องแรกที่เข้าเค้าที่สุด
+  // จับคู่ผลงานกับช่องในฟอร์ม — แต่ละชนิดเติมช่องเดียว
+  //
+  // กฎสองข้อที่ได้มาจากการลองกับหน้าจริง:
+  // 1. เติมเฉพาะช่องที่ว่าง — ครั้งแรกที่ลอง มันเล็งช่อง "แตะเพื่อพิมพ์เรียงความ"
+  //    ที่มี SOP เขียนไว้แล้ว เพราะคำว่าเรียงความก็นับเป็นรายละเอียดเหมือนกัน
+  //    บนใบสมัครจริง การทับของที่เขียนไว้แล้วคือความเสียหาย ไม่ใช่ความสะดวก
+  // 2. อยู่บล็อกเดียวกับหัวข้อ — หัวข้อกับรายละเอียดของผลงานชิ้นเดียวกัน
+  //    ต้องอยู่ในกล่องเดียวกัน ไม่ใช่คนละที่บนหน้า
   function buildPlan(item) {
     const values = {
       title: item.title,
@@ -276,9 +312,31 @@
       detail: item.detail,
       year: yearFrom(item.org),
     };
+
+    const all = candidateFields();
+    const empty = all.filter((el) => !readField(el).trim());
+    const skipped = all.length - empty.length;
+
+    let pool = empty;
+    const titleEl = empty.find((el) => guessKind(el) === "title");
+    if (titleEl) {
+      // ไต่ขึ้นจากช่องหัวข้อจนเจอกล่องที่มีช่องว่างมากกว่าหนึ่ง
+      // หยุดที่กล่องแรกที่เจอไม่ได้ — ของ TCASFolio หัวข้ออยู่ใน .free__item
+      // ส่วนรายละเอียดเป็นพี่น้องข้างนอก กล่องแรกจึงมีแค่หัวข้อช่องเดียว
+      let node = titleEl.parentElement;
+      for (let depth = 0; depth < 6 && node && node !== document.body; depth += 1) {
+        const inside = empty.filter((el) => node.contains(el));
+        if (inside.length > 1) {
+          pool = inside;
+          break;
+        }
+        node = node.parentElement;
+      }
+    }
+
     const used = new Set();
     const plan = [];
-    for (const el of candidateFields()) {
+    for (const el of pool) {
       const kind = guessKind(el);
       if (!kind || used.has(kind) || !values[kind]) continue;
       used.add(kind);
@@ -288,8 +346,19 @@
         value: values[kind],
         previous: readField(el),
         label: fieldLabel(el).slice(0, 34) || "(ช่องไม่มีชื่อ)",
+        note: "",
       });
     }
+
+    // TCASFolio มีแค่หัวข้อกับรายละเอียด ไม่มีช่องหน่วยงาน/ปีแยก
+    // ถ้าปล่อยไว้เฉย ๆ ข้อมูลจะหาย จึงเอาไปไว้บรรทัดแรกของรายละเอียด
+    // และบอกไว้ในแผนให้เห็น ไม่ใช่แอบต่อให้เงียบ ๆ
+    const detailStep = plan.find((s) => s.kind === "detail");
+    if (detailStep && item.org && !used.has("org")) {
+      detailStep.value = `${item.org}\n\n${item.detail}`;
+      detailStep.note = "พ่วงหน่วยงาน/ปีไว้บรรทัดแรก";
+    }
+    plan.skipped = skipped;
     return plan;
   }
 
@@ -302,7 +371,9 @@
 
     const head = document.createElement("div");
     head.className = "plan-head";
-    head.textContent = `จะเติม ${plan.length} ช่อง — ตรวจก่อนกดยืนยัน`;
+    head.textContent =
+      `จะเติม ${plan.length} ช่อง — ตรวจก่อนกดยืนยัน` +
+      (plan.skipped ? ` (ข้ามช่องที่มีข้อความอยู่แล้ว ${plan.skipped} ช่อง)` : "");
     noteText.append(head);
 
     for (const step of plan) {
@@ -314,6 +385,12 @@
       const where = document.createElement("span");
       where.textContent = ` → «${step.label}»`;
       row.append(tag, where);
+      if (step.note) {
+        const extra = document.createElement("span");
+        extra.className = "plan-note";
+        extra.textContent = ` (${step.note})`;
+        row.append(extra);
+      }
       if (step.previous.trim()) {
         const warn = document.createElement("span");
         warn.className = "plan-warn";
@@ -330,19 +407,52 @@
     note.hidden = false;
   }
 
-  function applyPlan(plan) {
+  // เขียนทีละช่องแล้วรอ ไม่ใช่รัวทีเดียว
+  // พอเขียนช่องแรก React จะ re-render บล็อกนั้นใหม่ ตัว element ที่จำไว้ตอนวางแผน
+  // จะหลุดออกจากหน้า (isConnected = false) เขียนลงไปก็ไม่มีผลและไม่มีใครรู้
+  // จึงต้องหาช่องใหม่จากป้ายชื่อเดิมก่อนเขียนทุกครั้ง
+  async function applyPlan(plan) {
     const done = [];
+    const failed = [];
+
     for (const step of plan) {
-      if (!step.el.isConnected) continue;
-      writeField(step.el, step.value);
-      done.push({ el: step.el, previous: step.previous });
+      let el = step.el;
+      if (!el.isConnected) {
+        el = candidateFields().find(
+          (f) => fieldLabel(f) === step.label && !readField(f).trim(),
+        );
+      }
+      if (!el) {
+        failed.push(step.label);
+        continue;
+      }
+
+      writeField(el, step.value);
+      await new Promise((r) => setTimeout(r, 250));
+
+      // เขียนแล้วต้องเช็คว่าติดจริง ไม่ใช่เชื่อว่าสั่งไปแล้วคือเสร็จ
+      let landed = el.isConnected ? readField(el) : "";
+      if (!landed.trim()) {
+        const again = candidateFields().find((f) => fieldLabel(f) === step.label);
+        if (again) {
+          writeField(again, step.value);
+          await new Promise((r) => setTimeout(r, 250));
+          landed = readField(again);
+          el = again;
+        }
+      }
+
+      if (landed.trim()) done.push({ el, previous: step.previous });
+      else failed.push(step.label);
     }
+
     lastFill = done;
     pendingPlan = null;
-    const overwrote = plan.filter((s) => s.previous.trim()).length;
-    showFilled(
-      `เติมแล้ว ${done.length} ช่อง` + (overwrote ? ` (ทับของเดิม ${overwrote})` : "") + " — ยังไม่ได้กดบันทึก",
-    );
+    if (failed.length) {
+      showFilled(`เติมได้ ${done.length} ช่อง · ไม่ติด ${failed.length} ช่อง (${failed.join(", ")})`);
+    } else {
+      showFilled(`เติมแล้ว ${done.length} ช่อง — ยังไม่ได้กดบันทึก`);
+    }
   }
 
   function isFillable(el) {
