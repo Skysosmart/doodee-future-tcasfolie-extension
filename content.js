@@ -549,8 +549,29 @@
         continue;
       }
 
+      // ช่องอินไลน์ (free__title/free__body) รับการแก้เฉพาะตอนบล็อกนั้น "ถูกเลือกอยู่"
+      // ถ้ายังไม่เลือก คลิกเลือกก่อน รอให้ React สร้างใหม่เสร็จ แล้วหา node ใหม่ชนิดเดิม
+      if (el.isContentEditable) {
+        const blk = outerBlock(el);
+        if (blk && !/is-selected/.test(blk.className || "")) {
+          blk.click();
+          await new Promise((r) => setTimeout(r, 500));
+          const stable = await settle(step);
+          if (stable && !readField(stable).trim()) el = stable;
+          else if (!el.isConnected) { failed.push(step.label); continue; }
+        }
+      }
+
       writeField(el, step.value);
       await new Promise((r) => setTimeout(r, 250));
+
+      // วัดจริง (seq-probe B4): เว็บ "commit" ช่อง contenteditable ตอน blur แล้วสร้างบล็อกใหม่
+      // ถ้าปล่อยให้ blur เกิดตอนเราไป click ช่องถัดไป ช่องถัดไปจะหลุดกลางมือ (exec=false)
+      // จึง blur เองตรงนี้ ให้เว็บสร้างใหม่ให้เสร็จก่อน แล้วค่อยไปช่องถัดไป
+      if (el.isConnected && el.isContentEditable) {
+        el.blur();
+        await new Promise((r) => setTimeout(r, 400));
+      }
 
       // เขียนแล้วต้องเช็คว่าติดจริง — วัดจริง: React ถอด node ทิ้ง "ระหว่าง" เขียน
       // (before: connected, after: detached) ข้อความติดอยู่ในบล็อกใหม่ แต่ถ้าอ่านจาก node เก่า
