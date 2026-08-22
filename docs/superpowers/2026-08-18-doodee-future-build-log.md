@@ -307,3 +307,40 @@ reload), M8, plus the earlier Ruling 13 list.
 End-to-end smoke test after all edits: foreign type survives edit+save, duplicate-id
 import keeps both entries with distinct ids and an honest status line, empty-file import
 refused with `ไฟล์นี้ไม่มีผลงานอยู่เลย` in the error style. `npm test` 15/15.
+
+## Phase 3 final review (2026-08-22) — two parallel reviewers, range `4b3baeb..0bffc9f`
+
+**Vault side** (`popup.js`/`storage.js`/`model.js`): 0 Critical, 6 Important.
+Ruling 16 — fixed in `950296b`: I1 (text-only edit could wipe an entry's images after one
+failed image read → images written only when touched), I2 (`pendingImages` assigned before
+the stale-edit guard → A's images saved under B), I3 (image-write failure left the form in
+"add new" mode → retry duplicated the entry), I5 (`get(null)` every render → `imgIndex`
+key), I4 (export omits images — now documented). I6 (caps) deferred: per-file 2 MiB stays,
+no total cap; `unlimitedStorage` is the real backstop.
+
+**Page side** (`content.js`/`inject.js`): 3 Critical, 5 Important — all three Criticals
+reproduced in the reviewer's own headless harnesses AND then on the live folio.
+Ruling 17 — fixed in `695e285` + follow-ups:
+- C1 re-find after React rebuild fell back to "first field with this label on the page" →
+  overwrote an older entry's detail (same shape as `628a036`). Now bounded to the plan's
+  anchor or the outer `.block` of the title just written, matched by kind.
+- C2 scope scoring counted only *empty* titles → a container spanning target+essay (or
+  target+another block's empty detail) won. Any container with >1 title of any state is
+  rejected; the essay field (`free__body--rich`) is excluded from every plan.
+- C3 `blockFor` prefix fallback could pick the wrong SOP block even with one candidate.
+  Exact title only; ambiguity = "not found", because uploads are irreversible.
+- I2 attach serialised; I3 confirm cannot double-fire and a plan whose anchor is gone is
+  rejected; I4 `←` search scoped to a panel containing level/result fields; I1 attach
+  target named before the first upload.
+- `inject.js` line-by-line: no defects (malformed data → caught reply; double-load guarded;
+  page pre-defining the global = denial only).
+
+Ruling 18 — the one bug neither review saw but live testing did (`blur` commit): TCASFolio
+commits contenteditable on blur and rebuilds the block; writing title then clicking detail
+made the blur fire *during* the detail write (execCommand returned false, node detached).
+Reproduced from main world via `seq-probe` — not realm-specific. Fixed by blurring after
+each contenteditable write. Measured: 2/2 fields land; no collateral.
+
+Deferred (Ruling 19): I5 "first slot.click may open the real file dialog within the 5 s
+activation window" — unverified, and if it happens the dialog is simply cancelled; M-list
+items (cached rejected `ensureInjected`, `postMessage("*")`, first image-input-wins) noted.
