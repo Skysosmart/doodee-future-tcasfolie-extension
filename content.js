@@ -220,6 +220,10 @@
                 "essay", "reason", "free__body"]],
     ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
               "year", "date", "เมื่อ"]],
+    ["level", ["ระดับ", "level", "scope"]],
+    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "result", "award",
+                "rank", "placement"]],
+    ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
   ];
 
   // ทุกแหล่งที่บอกได้ว่าช่องนี้คือช่องอะไร — ใช้จับคู่
@@ -275,7 +279,7 @@
     // ต้องเป็น [contenteditable] เปล่า ๆ ไม่ใช่ [contenteditable=true]
     // TCASFolio เขียน attribute เป็นค่าว่าง (contenteditable="") ซึ่งมีผลเป็น true
     // แต่ selector ที่เจาะจงค่าจะจับไม่ได้ — กรองจริงด้วย el.isContentEditable ใน isFillable
-    const all = [...document.querySelectorAll("input, textarea, [contenteditable]")];
+    const all = [...document.querySelectorAll("input, textarea, select, [contenteditable]")];
     return all.filter(
       (el) => !host.contains(el) && el !== host && isFillable(el) && !fieldProblem(el) && isVisible(el),
     );
@@ -292,9 +296,19 @@
     return el.tagName === "TEXTAREA" || el.isContentEditable ? "detail" : "";
   }
 
-  function yearFrom(text) {
+  // ในคลังเก็บหน่วยงานกับวันที่รวมกันเป็น "ชื่อหน่วยงาน · 16 พฤษภาคม 2569"
+  // ฟอร์มจริงแยกเป็นสองช่อง จึงต้องตัดตรงจุดคั่นให้ตรงช่อง
+  function splitOrg(text) {
+    const parts = String(text).split("·").map((x) => x.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      const tail = parts[parts.length - 1];
+      // ท่อนท้ายที่มีตัวเลขคือวันที่ ไม่ใช่ชื่อหน่วยงาน
+      if (/\d/.test(tail)) {
+        return { org: parts.slice(0, -1).join(" · "), when: tail };
+      }
+    }
     const m = String(text).match(/(?:25|26|19|20)\d{2}/);
-    return m ? m[0] : "";
+    return { org: String(text), when: m ? m[0] : "" };
   }
 
   // จับคู่ผลงานกับช่องในฟอร์ม — แต่ละชนิดเติมช่องเดียว
@@ -306,41 +320,58 @@
   // 2. อยู่บล็อกเดียวกับหัวข้อ — หัวข้อกับรายละเอียดของผลงานชิ้นเดียวกัน
   //    ต้องอยู่ในกล่องเดียวกัน ไม่ใช่คนละที่บนหน้า
   function buildPlan(item) {
+    const parted = splitOrg(item.org);
     const values = {
       title: item.title,
-      org: item.org,
+      org: parted.org,
       detail: item.detail,
-      year: yearFrom(item.org),
+      year: parted.when,
+      level: item.level || "",
+      result: item.result || "",
+      hours: item.hours || "",
     };
 
     const all = candidateFields();
     const empty = all.filter((el) => !readField(el).trim());
     const skipped = all.length - empty.length;
 
-    let pool = empty;
-    const titleEl = empty.find((el) => guessKind(el) === "title");
-    if (titleEl) {
-      // ไต่ขึ้นจากช่องหัวข้อจนเจอกล่องที่มีช่องว่างมากกว่าหนึ่ง
-      // หยุดที่กล่องแรกที่เจอไม่ได้ — ของ TCASFolio หัวข้ออยู่ใน .free__item
-      // ส่วนรายละเอียดเป็นพี่น้องข้างนอก กล่องแรกจึงมีแค่หัวข้อช่องเดียว
-      //
-      // แต่ห้ามไต่ทะลุขอบบล็อกเด็ดขาด: ถ้ากล่องนั้นมีช่องหัวข้ออื่นอยู่ด้วย
-      // แปลว่าเลยไปในอาณาเขตของผลงานชิ้นอื่นแล้ว
-      // (เคยพลาดมาแล้วบนหน้าจริง — รายละเอียดของทุกชิ้นวิ่งไปลงบล็อกแรกหมด
-      //  เพราะบล็อกแรกมีช่องรายละเอียดว่างอยู่ ทับกันไปเรื่อย ๆ)
-      let node = titleEl.parentElement;
-      for (let depth = 0; depth < 6 && node && node !== document.body; depth += 1) {
-        const inside = empty.filter((el) => node.contains(el));
-        const titlesInside = inside.filter((el) => guessKind(el) === "title");
-        if (titlesInside.length > 1) break; // ข้ามเขตแล้ว ใช้ขอบเขตเดิมที่แคบกว่า
-        if (inside.length > 1) {
-          pool = inside;
-          break;
-        }
+    // เลือกขอบเขตด้วยการให้คะแนน แทนการไต่ขึ้นจากช่องหัวข้อ
+    //
+    // บนหน้าจริง พอเปิดแผงแก้ไขของบล็อก จะมีช่องสองชุดพร้อมกัน:
+    // ชุดอินไลน์ในบล็อก (หัวข้อ + รายละเอียด) กับชุดในแผงแก้ไข
+    // (หัวข้อ ระดับ ผลรางวัล หน่วยงาน ชั่วโมง ช่วงเวลา รายละเอียด)
+    // การไต่จากหัวข้อตัวแรกจะไปเจอชุดอินไลน์ก่อนแล้วได้แค่ 2 ช่อง
+    // จึงเปลี่ยนมาให้คะแนนทุกกล่อง แล้วเลือกกล่องที่กรอกได้ครบชนิดที่สุด
+    const scopes = new Map();
+    for (const el of empty) {
+      let node = el.parentElement;
+      for (let d = 0; d < 8 && node; d += 1) {
+        if (!scopes.has(node)) scopes.set(node, []);
+        scopes.get(node).push(el);
         node = node.parentElement;
       }
-      // ไม่เจอกล่องที่ปลอดภัย — เติมแค่หัวข้อ ดีกว่าไปเขียนทับของชิ้นอื่น
-      if (pool === empty) pool = [titleEl];
+    }
+
+    let pool = empty;
+    let bestKinds = -1;
+    let bestSize = Infinity;
+    for (const [, fields] of scopes) {
+      const kinds = new Set();
+      let titles = 0;
+      for (const el of fields) {
+        const kind = guessKind(el);
+        if (!kind || !values[kind]) continue;
+        if (kind === "title") titles += 1;
+        kinds.add(kind);
+      }
+      // กล่องที่มีหัวข้อมากกว่าหนึ่ง = คร่อมผลงานหลายชิ้น ห้ามใช้
+      if (titles > 1 || !kinds.size) continue;
+      // ครอบคลุมชนิดได้มากกว่าชนะ ถ้าเท่ากันเอากล่องที่แคบกว่า
+      if (kinds.size > bestKinds || (kinds.size === bestKinds && fields.length < bestSize)) {
+        bestKinds = kinds.size;
+        bestSize = fields.length;
+        pool = fields;
+      }
     }
 
     const used = new Set();
@@ -371,7 +402,10 @@
     return plan;
   }
 
-  const KIND_TH = { title: "ชื่อ", org: "หน่วยงาน", detail: "รายละเอียด", year: "ปี" };
+  const KIND_TH = {
+    title: "ชื่อ", org: "หน่วยงาน", detail: "รายละเอียด", year: "ปี",
+    level: "ระดับ", result: "ผลรางวัล", hours: "ชั่วโมง",
+  };
 
   function showPlan(plan) {
     pendingPlan = plan;
@@ -469,6 +503,8 @@
     if (el.isContentEditable) return true;
     const tag = el.tagName;
     if (tag === "TEXTAREA") return true;
+    // select เติมได้ถ้าตัวเลือกตรงกับค่าที่เก็บไว้ (เช่นช่อง "ระดับ" ของ TCASFolio)
+    if (tag === "SELECT") return true;
     if (tag !== "INPUT") return false;
     return !BLOCKED_TYPES.has((el.type || "text").toLowerCase());
   }
@@ -497,12 +533,26 @@
   }
 
   function readField(el) {
-    return el.isContentEditable ? el.textContent : el.value;
+    if (el.isContentEditable) return el.textContent;
+    // ตัวเลือกแรกของ select คือ placeholder ("— เลือกระดับ —") ถือว่ายังว่าง
+    if (el.tagName === "SELECT") {
+      return el.selectedIndex > 0 ? (el.options[el.selectedIndex].textContent || "").trim() : "";
+    }
+    return el.value;
   }
 
   // React/Vue ไม่รู้จักการเซ็ต .value ตรง ๆ — ค่าจะขึ้นบนจอแต่ตอน submit เป็นว่าง
   // ต้องเรียก native setter ของ prototype แล้วยิง input event ให้เขาเห็นเอง
   function writeField(el, value) {
+    if (el.tagName === "SELECT") {
+      const opt = [...el.options].find((o) => (o.textContent || "").trim() === value);
+      if (!opt) return; // ไม่มีตัวเลือกที่ตรง อย่ามั่วเลือกอันอื่นให้
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+      setter.call(el, opt.value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      return;
+    }
     if (el.isContentEditable) {
       el.focus();
       const range = document.createRange();
@@ -599,7 +649,8 @@
 
     const meta = document.createElement("div");
     meta.className = "item-meta";
-    meta.textContent = item.org ? `${item.type} · ${item.org}` : item.type;
+    const extras = [item.level, item.result].filter(Boolean).join(" · ");
+    meta.textContent = [item.type, item.org, extras].filter(Boolean).join(" · ");
 
     const copyBtn = document.createElement("button");
     copyBtn.type = "button";

@@ -14,6 +14,15 @@
     "ผลงานสร้างสรรค์",
   ];
 
+  // ตรงกับตัวเลือกในช่อง "ระดับ" ของ TCASFolio เป๊ะ ๆ
+  // เขียนต่างจากนี้แม้แต่ตัวเดียว ตอนเติมจะหาตัวเลือกไม่เจอ
+  const LEVELS = [
+    "ระดับโรงเรียน/สถาบัน",
+    "ระดับจังหวัด/เขต/ภาค",
+    "ระดับชาติ",
+    "ระดับนานาชาติ",
+  ];
+
   const EXPORT_VERSION = 1;
 
   function str(value) {
@@ -50,6 +59,9 @@
       type: str(fields.type),
       title: str(fields.title),
       org: str(fields.org),
+      level: LEVELS.includes(str(fields.level)) ? str(fields.level) : "",
+      result: str(fields.result),
+      hours: str(fields.hours),
       detail: str(fields.detail),
       tags: normalizeTags(fields.tags),
       createdAt: Number.isFinite(opts.now) ? opts.now : Date.now(),
@@ -68,6 +80,10 @@
         type: str(entry.type),
         title: str(entry.title),
         org: str(entry.org),
+        // ระดับที่ไม่ตรงตัวเลือกของเว็บ ปล่อยว่างดีกว่าเก็บค่าที่เติมไม่ได้
+        level: LEVELS.includes(str(entry.level)) ? str(entry.level) : "",
+        result: str(entry.result),
+        hours: str(entry.hours),
         detail: str(entry.detail),
         tags: normalizeTags(entry.tags),
         createdAt: Number.isFinite(entry.createdAt) ? entry.createdAt : 0,
@@ -159,6 +175,7 @@
 
   root.Model = {
     TYPES,
+    LEVELS,
     EXPORT_VERSION,
     newId,
     normalizeTags,

@@ -48,11 +48,27 @@ function fillTypeOptions() {
   }
 }
 
+// ระดับเว้นว่างได้ ไม่ใช่ทุกผลงานจะมีระดับ
+function fillLevelOptions() {
+  const select = el("level");
+  const blank = document.createElement("option");
+  blank.textContent = "";
+  select.appendChild(blank);
+  for (const level of Model.LEVELS) {
+    const option = document.createElement("option");
+    option.textContent = level;
+    select.appendChild(option);
+  }
+}
+
 function readForm() {
   return {
     type: el("type").value,
     title: el("title").value,
     org: el("org").value,
+    level: el("level").value,
+    result: el("result").value,
+    hours: el("hours").value,
     tags: el("tags").value,
     detail: el("detail").value,
   };
@@ -64,7 +80,8 @@ function resetForm() {
     option.remove();
   }
   el("type").selectedIndex = 0;
-  for (const id of ["title", "org", "tags", "detail"]) el(id).value = "";
+  el("level").selectedIndex = 0;
+  for (const id of ["title", "org", "result", "hours", "tags", "detail"]) el(id).value = "";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
@@ -84,6 +101,9 @@ function startEditing(item) {
   el("type").value = item.type;
   el("title").value = item.title;
   el("org").value = item.org;
+  el("level").value = item.level || "";
+  el("result").value = item.result || "";
+  el("hours").value = item.hours || "";
   el("tags").value = Model.formatTags(item.tags);
   el("detail").value = item.detail;
   el("formHeading").textContent = "แก้ไขผลงาน";
@@ -103,7 +123,8 @@ function itemCard(item) {
 
   const meta = document.createElement("div");
   meta.className = "item-meta";
-  meta.textContent = item.org ? `${item.type} · ${item.org}` : item.type;
+  const extras = [item.level, item.result].filter(Boolean).join(" · ");
+  meta.textContent = [item.type, item.org, extras].filter(Boolean).join(" · ");
 
   box.append(title, meta);
 
@@ -288,6 +309,7 @@ el("importFile").addEventListener("change", async (event) => {
 });
 
 fillTypeOptions();
+fillLevelOptions();
 // อีกหน้าต่างหนึ่งแก้ข้อมูล หน้านี้ต้องตามทัน
 Storage.onItemsChanged((items) => render(items));
 render();

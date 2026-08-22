@@ -174,3 +174,27 @@ test("parseImport refuses a file that carries no items", () => {
   // ของที่มีจริงต้องยังผ่านเหมือนเดิม
   assert.equal(M.parseImport(JSON.stringify([{ title: "ยังอ่านได้" }])).length, 1);
 });
+
+test("ฟิลด์ใหม่ ระดับ/ผลรางวัล/ชั่วโมง ถูกเก็บและกรองค่าที่ใช้ไม่ได้ทิ้ง", () => {
+  const ok = M.makeItem(
+    { title: "x", level: "ระดับชาติ", result: "เหรียญทอง", hours: "30" },
+    { id: "a", now: 0 },
+  );
+  assert.equal(ok.level, "ระดับชาติ");
+  assert.equal(ok.result, "เหรียญทอง");
+  assert.equal(ok.hours, "30");
+
+  // ระดับที่ไม่ตรงตัวเลือกของเว็บ เติมลงฟอร์มไม่ได้อยู่ดี เก็บไว้ก็หลอกตัวเอง
+  const bad = M.makeItem({ title: "x", level: "ระดับหมู่บ้าน" }, { id: "b", now: 0 });
+  assert.equal(bad.level, "");
+
+  // ของเก่าที่ยังไม่มีสามฟิลด์นี้ ต้องได้ค่าว่างและถูกเขียนกลับหนึ่งครั้ง
+  const { items, changed } = M.normalize([
+    { id: "c", type: "กิจกรรม", title: "เก่า", org: "", detail: "", tags: [], createdAt: 1 },
+  ]);
+  assert.equal(items[0].level, "");
+  assert.equal(items[0].result, "");
+  assert.equal(items[0].hours, "");
+  assert.equal(changed, true, "ต้องบอกให้ storage เขียนกลับ");
+  assert.equal(M.normalize(items).changed, false, "ครั้งที่สองต้องนิ่งแล้ว");
+});
