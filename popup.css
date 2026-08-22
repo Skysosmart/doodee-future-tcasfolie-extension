@@ -157,3 +157,11 @@ hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
 }
 
 .img-count { color: #878d9b; font-size: 11px; margin-left: 6px; }
+
+.welcome { padding: 12px 14px; border: 1px dashed #3a4150; border-radius: 8px; margin-top: 4px; }
+.welcome h2 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.welcome ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.55; }
+.welcome li { margin: 4px 0; }
+.welcome-note { margin: 10px 0 0; font-size: 12px; color: var(--dim); }
+.welcome .k { font-family: ui-monospace, monospace; font-size: 11px; padding: 1px 6px; border: 1px solid #3a4150; border-radius: 4px; }
+.linkish { background: none; border: none; padding: 0; color: #9dbcff; text-decoration: underline; cursor: pointer; font: inherit; }

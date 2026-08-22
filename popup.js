@@ -300,6 +300,8 @@ async function render(known) {
     return;
   }
   el("empty").textContent = "ยังไม่มีข้อมูล";
+  // คลังว่าง = ครั้งแรก → โชว์ 3 ขั้นสั้น ๆ แทนข้อความเปล่า หายเองเมื่อมีผลงาน
+  el("welcome").hidden = items.length > 0;
   try {
     imageCounts = await Storage.getImageCounts();
   } catch (error) {
@@ -315,6 +317,7 @@ async function render(known) {
 
   el("count").textContent = items.length;
   el("empty").style.display = items.length ? "none" : "block";
+  el("welcome").hidden = items.length > 0;
   el("list").replaceChildren(...items.map(itemCard));
 }
 
@@ -417,6 +420,7 @@ el("exportBtn").addEventListener("click", async () => {
 });
 
 el("importBtn").addEventListener("click", () => el("importFile").click());
+el("welcomeImport").addEventListener("click", () => el("importFile").click());
 
 el("importFile").addEventListener("change", async (event) => {
   const file = event.target.files[0];

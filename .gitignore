@@ -1,2 +1,5 @@
 node_modules/
 *.zip
+# คลังส่วนตัว — ห้ามขึ้น repo
+doodee-future-*.json
+*.crdownload

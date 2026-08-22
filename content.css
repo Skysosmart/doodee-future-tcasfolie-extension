@@ -72,6 +72,16 @@
 }
 
 /* overscroll-behavior: เลื่อนสุดรายการแล้วต้องไม่ไปเลื่อนใบสมัครที่อยู่ข้างหลัง */
+.toggle.help { margin-right: 4px; font-weight: 600; }
+
+.help-card { margin: 0 10px 8px; padding: 9px 11px; background: #1d2027; border: 1px solid #2b2f38; border-radius: 6px; font-size: 12px; }
+.help-head { font-weight: 600; margin-bottom: 6px; color: #c6d9ff; }
+.help-card ol { margin: 0; padding-left: 18px; }
+.help-card li { margin: 4px 0; line-height: 1.45; }
+.help-card li b { display: block; font-weight: 600; }
+.help-card li small { color: #878d9b; font-size: 11px; }
+.help-foot { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #2b2f38; color: #878d9b; font-size: 11px; }
+
 .body { padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
 
 .note {

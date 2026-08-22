@@ -64,7 +64,47 @@
     }
   });
 
-  header.append(heading, toggle);
+  // ปุ่มช่วยเหลือตรงหน้างาน — คนไม่อ่านคู่มือแยก แต่จะกด ? ตอนติด
+  const helpBtn = document.createElement("button");
+  helpBtn.type = "button";
+  helpBtn.className = "toggle help";
+  helpBtn.textContent = "?";
+  helpBtn.title = "วิธีใช้";
+  helpBtn.setAttribute("aria-expanded", "false");
+
+  const help = document.createElement("div");
+  help.className = "help-card";
+  help.hidden = true;
+  {
+    const h = document.createElement("div");
+    h.className = "help-head";
+    h.textContent = "4 ขั้น ต่อผลงาน 1 ชิ้น";
+    const ol = document.createElement("ol");
+    for (const [main, sub] of [
+      ["กด ＋ เพิ่มรางวัล (หรือหมวดอื่น) ในเว็บ", "ได้บล็อกเปล่า 1 บล็อก"],
+      ["คลิกหัวบล็อกเปิดแผงแก้ไขด้านซ้าย", "ข้ามขั้นนี้จะเติมได้แค่ 2 ช่อง"],
+      ["กด เติมทั้งฟอร์ม ในการ์ด → ดูแผน → ยืนยันเติม", "ลงครบ 6 ช่อง · ผิดกด ย้อนกลับ"],
+      ["ติ๊ก ค่าใช้จ่าย เอง → กด บันทึกแฟ้ม ของเว็บ", "เว็บไม่บันทึกเอง ปิดแท็บก่อน = หาย"],
+    ]) {
+      const li = document.createElement("li");
+      const b = document.createElement("b");
+      b.textContent = main;
+      const small = document.createElement("small");
+      small.textContent = sub;
+      li.append(b, small);
+      ol.appendChild(li);
+    }
+    const foot = document.createElement("div");
+    foot.className = "help-foot";
+    foot.textContent = "แนบรูป (N) ใช้หลังเติมข้อความแล้ว · เติมเฉพาะช่องว่าง ไม่แตะเรียงความ ไม่แตะของที่ Verify แล้ว";
+    help.append(h, ol, foot);
+  }
+  helpBtn.addEventListener("click", () => {
+    help.hidden = !help.hidden;
+    helpBtn.setAttribute("aria-expanded", String(!help.hidden));
+  });
+
+  header.append(heading, helpBtn, toggle);
 
   const body = document.createElement("div");
   body.className = "body";
@@ -154,7 +194,7 @@
   list.className = "list";
 
   body.append(typeSelect, tagBar, list);
-  root.append(header, note, body);
+  root.append(header, help, note, body);
   shadow.append(sheet, root);
 
   function applyCollapsed() {

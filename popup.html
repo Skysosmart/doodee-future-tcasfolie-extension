@@ -53,6 +53,15 @@
     <h1>คลังผลงาน (<span id="count">0</span>)</h1>
     <div id="list"></div>
     <div id="empty">ยังไม่มีข้อมูล</div>
+    <div id="welcome" class="welcome" hidden>
+      <h2>เริ่มยังไง</h2>
+      <ol>
+        <li><b>ใส่ผลงานเข้าคลัง</b> — กรอกฟอร์มด้านบนทีละชิ้น หรือ <button type="button" id="welcomeImport" class="linkish">นำเข้าไฟล์ JSON</button> ถ้ามีอยู่แล้ว</li>
+        <li><b>แนบรูปเกียรติบัตร</b> ไว้กับผลงานชิ้นนั้น (ปุ่ม ＋ แนบรูป)</li>
+        <li><b>เปิด TCASFolio</b> แล้วกดปุ่ม <span class="k">▸</span> กลางขอบขวาของจอ — ที่เหลือทำจากตรงนั้น</li>
+      </ol>
+      <p class="welcome-note">ข้อมูลอยู่ในเครื่องนี้เท่านั้น ไม่ส่งไปไหน · กด <span class="k">ส่งออก JSON</span> เป็นระยะเพื่อสำรอง</p>
+    </div>
 
     <script src="model.js"></script>
     <script src="storage.js"></script>
