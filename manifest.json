@@ -3,22 +3,36 @@
   "name": "Doodee future",
   "version": "1.0",
   "description": "คลังเก็บข้อมูลผลงานจากเล่ม portfolio เดิม สำหรับกรอก TCASFolio",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Doodee future"
   },
   "content_scripts": [
     {
-      "matches": ["https://student.mytcas.com/*"],
-      "js": ["model.js", "storage.js", "content.js"],
+      "matches": [
+        "https://student.mytcas.com/*"
+      ],
+      "js": [
+        "model.js",
+        "storage.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content.css"],
-      "matches": ["https://student.mytcas.com/*"],
+      "resources": [
+        "content.css",
+        "inject.js"
+      ],
+      "matches": [
+        "https://student.mytcas.com/*"
+      ],
       "use_dynamic_url": true
     }
   ]

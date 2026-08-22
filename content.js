@@ -639,6 +639,233 @@
     return button;
   }
 
+  // -------------------------------------------------------------
+  // แนบรูปลงบล็อกของ TCASFolio
+  //
+  // กลไกของเว็บ (สำรวจจากหน้าจริง):
+  //   - มี <input type=file accept="image/jpeg,image/png"> ซ่อนอยู่ตัวเดียวทั้งหน้า ใช้ร่วมกันทุกบล็อก
+  //   - ต้องคลิกเลือกบล็อกก่อน แถบเครื่องมือถึงโผล่ ปุ่ม title="เพิ่มรูป" อยู่ในนั้น
+  //   - กดเพิ่มรูปแล้วจะได้ช่องว่าง span.frame__phlabel "เลือกรูปภาพ" ในบล็อกนั้น
+  //   - คลิกช่องว่าง → input รับไฟล์ของช่องนั้น → เว็บอัปโหลดขึ้น S3 ทันที
+  //
+  // ข้อจำกัดที่ต้องระวัง: ช่องรูปผูกกับบล็อกที่ "ถูกเลือกอยู่" ไม่ใช่กับผลงาน
+  // จึงต้องหาบล็อกที่หัวข้อตรงกับผลงานชิ้นนี้ก่อน แล้วเลือกมันให้ชัวร์ก่อนป้อนไฟล์
+  // ไม่งั้นรูปไปลงบล็อกผิด (เคยเกิดแล้วตอนเทสต์: ใบ SWU ไปอยู่กับ I-NEW GEN)
+  // -------------------------------------------------------------
+
+  let imageCounts = {};
+
+  // ขอบเขตบล็อกต้องเป็น .block ชั้นนอก ไม่ใช่ .block__inner
+  // closest("[class*=block]") จะชน block__inner ก่อน ซึ่งเป็นแค่ชั้นในของส่วนข้อความ
+  // ส่วนรูป (.imgs) อยู่ใน block__inner อีกตัวที่เป็นพี่น้องกัน — หาจากชั้นในจึงไม่เจอ
+  function outerBlock(el) {
+    let node = el;
+    let best = null;
+    while (node && node !== document.body) {
+      const cls = (node.className || "").toString();
+      if (/(^|\s)block(\s|$)/.test(cls)) best = node; // คลาส "block" เพียว ๆ คือชั้นนอกสุด
+      node = node.parentElement;
+    }
+    return best || el.closest("[class*=block]") || el.parentElement;
+  }
+
+  function pageBlocks() {
+    return [...document.querySelectorAll("[class*=free__title]")]
+      .filter((el) => !host.contains(el))
+      .map((titleEl) => ({ titleEl, block: outerBlock(titleEl) }));
+  }
+
+  // หาบล็อกที่เป็นของผลงานชิ้นนี้ — จับจากหัวข้อ ไม่ใช่ตำแหน่ง
+  function blockFor(item) {
+    const want = item.title.trim();
+    const all = pageBlocks();
+    return (
+      all.find((b) => b.titleEl.textContent.trim() === want) ||
+      all.find((b) => b.titleEl.textContent.trim().startsWith(want.slice(0, 24))) ||
+      null
+    );
+  }
+
+  function pageFileInput() {
+    return [...document.querySelectorAll('input[type="file"]')].find(
+      (el) => !host.contains(el) && /image/.test(el.accept || ""),
+    );
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // content script อยู่ isolated world — File ที่สร้างจากตรงนี้ React ของเว็บไม่รับ
+  // (ทดสอบแล้ว: โค้ดเดียวกัน จาก isolated ไม่ติด จาก main ติด)
+  // จึงฉีด inject.js ตัวเล็ก ๆ เข้า main world แล้วส่งรูปไปให้มันป้อนแทน
+  let injectReady = null;
+  function ensureInjected() {
+    if (injectReady) return injectReady;
+    injectReady = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = chrome.runtime.getURL("inject.js");
+      script.addEventListener("load", () => {
+        script.remove(); // โหลดแล้วไม่ต้องค้างไว้ใน DOM ของเขา
+        resolve();
+      });
+      script.addEventListener("error", () => reject(new Error("โหลดตัวช่วยฝั่งหน้าเว็บไม่ได้")));
+      (document.head || document.documentElement).appendChild(script);
+    });
+    return injectReady;
+  }
+
+  // ส่งรูปหนึ่งใบให้ฝั่งหน้าเว็บป้อนเข้า input — รอผลตอบกลับ ไม่เดาเอาเอง
+  function handToPage(img) {
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onReply);
+        resolve({ ok: false, why: "ฝั่งหน้าเว็บไม่ตอบ" });
+      }, 5000);
+      function onReply(event) {
+        if (event.source !== window) return;
+        const m = event.data;
+        if (!m || m.tag !== "doodee-future:attach-result" || m.requestId !== requestId) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", onReply);
+        resolve({ ok: m.ok === true, why: m.why || "" });
+      }
+      window.addEventListener("message", onReply);
+      window.postMessage(
+        { tag: "doodee-future:attach", requestId, image: { name: img.name, type: img.type, data: img.data } },
+        "*",
+      );
+    });
+  }
+
+  async function attachImages(item, button) {
+    const found = blockFor(item);
+    if (!found) {
+      showNote("ยังไม่มีบล็อกของผลงานนี้บนหน้า — เติมข้อความก่อน แล้วค่อยแนบรูป");
+      return;
+    }
+
+    let images;
+    try {
+      images = await Storage.getImages(item.id);
+    } catch (error) {
+      showNote(`โหลดรูปจากคลังไม่ได้: ${error.message}`);
+      return;
+    }
+    if (!images.length) {
+      showNote("ผลงานนี้ยังไม่มีรูปในคลัง — แนบจากไอคอนส่วนขยายก่อน");
+      return;
+    }
+
+    const input = pageFileInput();
+    if (!input) {
+      showNote("หน้านี้ไม่มีช่องอัปโหลดรูปของ TCASFolio");
+      return;
+    }
+
+    button.disabled = true;
+    let done = 0;
+    let slotsFull = false;
+    try {
+      await ensureInjected();
+
+      // ปิดแผงแก้ไขก่อน — ตอนแผงเปิดอยู่ คลิกบล็อกไม่ย้าย selection
+      // ปุ่ม "เพิ่มรูป" จะไปทำกับบล็อกที่แผงถืออยู่ แล้วช่องใหม่โผล่ผิดที่
+      const backBtn = [...document.querySelectorAll("button")].find(
+        (b) => b.getClientRects().length && b.textContent.trim() === "←",
+      );
+      if (backBtn) {
+        backBtn.click();
+        await sleep(900);
+      }
+
+      // เลือกบล็อกให้ชัวร์ก่อน แถบเครื่องมือถึงจะเป็นของบล็อกนี้
+      found.block.scrollIntoView({ block: "center" });
+      await sleep(300);
+      found.block.click();
+      await sleep(700);
+      // ยืนยันว่าเลือกติดจริง ไม่งั้นทุกอย่างหลังจากนี้ไปลงบล็อกอื่น
+      if (!/is-selected/.test(found.block.className || "")) {
+        found.block.click();
+        await sleep(700);
+      }
+
+      for (const img of images) {
+        button.textContent = `แนบรูป ${done + 1}/${images.length}…`;
+
+        // หาช่องว่างในบล็อกนี้ ถ้าไม่มีกดเพิ่มรูปก่อน
+        // ต้องคลิก .frame__ph (ตัวรับ click ของเว็บ) ไม่ใช่ span ข้อความข้างใน
+        // handler ของเว็บจะตั้ง "เป้าหมาย" ไว้ตอนคลิกนี้ แล้วใช้ครั้งเดียวตอน change
+        let slot = found.block.querySelector(".frame__ph");
+        if (!slot) {
+          const add = [...document.querySelectorAll("button")].find(
+            (b) => (b.title || "") === "เพิ่มรูป" && b.getClientRects().length,
+          );
+          if (!add) break;
+          add.click();
+          await sleep(1200);
+          slot = found.block.querySelector(".frame__ph");
+        }
+        if (!slot) {
+          slotsFull = true; // เลย์เอาต์ของบล็อกรับรูปเพิ่มไม่ได้แล้ว
+          break;
+        }
+
+        // วัดว่า "ติด" จากจำนวนรูปจริง (blob:/S3) ที่เพิ่มขึ้น — ไม่ใช่ <img> รวม
+        // (เว็บมี <img> placeholder) และไม่ใช่ช่องว่างที่ลด (เว็บไม่ลบช่องทันที)
+        // สองแบบก่อนหน้ารายงาน 0/N ทั้งที่รูปติดแล้ว วัดจาก snapshot หน้าจริง
+        const realImages = () =>
+          [...found.block.querySelectorAll("img")].filter((i) =>
+            /^(blob:|https?:\/\/[^/]*s3[.-])/.test(i.src || ""),
+          ).length;
+        const realBefore = realImages();
+
+        // เว็บจะเรียก input.click() เปิด dialog จริง — ดักไว้ ไม่งั้นหน้าต่างเลือกไฟล์เด้ง
+        const origClick = input.click;
+        input.click = () => {};
+        try {
+          slot.click();
+          await sleep(400);
+        } finally {
+          input.click = origClick;
+        }
+
+        // ป้อนไฟล์ผ่านตัวช่วยฝั่ง main world — File ต้องเป็นของ realm เว็บ
+        const handed = await handToPage(img);
+        if (!handed.ok) {
+          showNote(`ส่งรูปให้หน้าเว็บไม่ได้: ${handed.why}`);
+          break;
+        }
+
+        // รอให้อัปโหลดติดจริง — รูปจริงในบล็อกต้องเพิ่ม ไม่ใช่เชื่อว่าสั่งแล้วคือเสร็จ
+        let landed = false;
+        for (let tries = 0; tries < 25; tries += 1) {
+          await sleep(400);
+          if (realImages() > realBefore) {
+            landed = true;
+            break;
+          }
+        }
+        if (!landed) break;
+        done += 1;
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent = `แนบรูป (${images.length})`;
+    }
+
+    if (done === images.length) {
+      showFilled(`แนบรูปแล้ว ${done} ใบ ลงบล็อก «${found.titleEl.textContent.trim().slice(0, 30)}»`);
+      undoBtn.hidden = true; // รูปอัปโหลดขึ้นเซิร์ฟเวอร์แล้ว ย้อนด้วยปุ่มลบรูปของเว็บเอง
+    } else if (slotsFull) {
+      showNote(
+        `แนบได้ ${done}/${images.length} ใบ — บล็อกนี้รับรูปเพิ่มไม่ได้แล้ว ` +
+          `เปลี่ยนเลย์เอาต์รูปในแถบเครื่องมือของบล็อก (เช่น "2 รูป") แล้วกดแนบซ้ำ`,
+      );
+    } else {
+      showNote(`แนบได้ ${done}/${images.length} ใบ — ที่เหลือลองกดซ้ำ`);
+    }
+  }
+
   function card(item) {
     const box = document.createElement("div");
     box.className = "item";
@@ -704,6 +931,16 @@
     });
     fillRow.append(allBtn);
 
+    const n = imageCounts[item.id] || 0;
+    if (n) {
+      const imgBtn = document.createElement("button");
+      imgBtn.type = "button";
+      imgBtn.className = "fill fill-img";
+      imgBtn.textContent = `แนบรูป (${n})`;
+      imgBtn.addEventListener("click", () => attachImages(item, imgBtn));
+      fillRow.append(imgBtn);
+    }
+
     box.append(title, meta, fillRow, copyBtn);
     return box;
   }
@@ -723,6 +960,15 @@
     }
 
     list.replaceChildren(...shown.map(card));
+  }
+
+  async function refreshImageCounts() {
+    try {
+      imageCounts = await Storage.getImageCounts();
+    } catch (error) {
+      imageCounts = {};
+    }
+    renderList();
   }
 
   function refresh(next) {
@@ -751,6 +997,8 @@
   (async () => {
     try {
       Storage.onItemsChanged(refresh);
+      Storage.onImagesChanged(() => refreshImageCounts());
+      await refreshImageCounts();
       collapsed = await Storage.getPanelCollapsed();
       // ผู้ใช้กดย่อ/กางไปแล้วระหว่างรออ่าน ค่าเก่าที่เพิ่งอ่านมาถือว่าตกยุค
       if (!userToggled) applyCollapsed();

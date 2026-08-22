@@ -74,8 +74,52 @@ function readForm() {
   };
 }
 
+// รูปที่แนบไว้กับฟอร์มตอนนี้ (ยังไม่บันทึก) — [{ name, type, data }]
+let pendingImages = [];
+let imageCounts = {};
+
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // เกียรติบัตรถ่ายมือถือปกติไม่ถึง
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่ได้"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPendingImages() {
+  const list = el("imageList");
+  list.replaceChildren(
+    ...pendingImages.map((img, index) => {
+      const box = document.createElement("div");
+      box.className = "thumb";
+      box.title = img.name;
+      const pic = document.createElement("img");
+      pic.src = img.data;
+      pic.alt = img.name;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = "เอารูปนี้ออก";
+      remove.addEventListener("click", () => {
+        pendingImages.splice(index, 1);
+        renderPendingImages();
+      });
+      box.append(pic, remove);
+      return box;
+    }),
+  );
+  el("imageBtn").textContent = pendingImages.length
+    ? `＋ แนบรูปเพิ่ม (${pendingImages.length})`
+    : "＋ แนบรูป";
+}
+
 function resetForm() {
   editingId = null;
+  pendingImages = [];
+  renderPendingImages();
   for (const option of [...el("type").querySelectorAll("[data-foreign]")]) {
     option.remove();
   }
@@ -87,8 +131,18 @@ function resetForm() {
   el("cancelBtn").hidden = true;
 }
 
-function startEditing(item) {
+async function startEditing(item) {
   editingId = item.id;
+  pendingImages = [];
+  renderPendingImages();
+  try {
+    pendingImages = await Storage.getImages(item.id);
+  } catch (error) {
+    showStatus(`โหลดรูปไม่ได้: ${error.message}`, true);
+  }
+  // ระหว่างรอโหลด ผู้ใช้อาจกดไปชิ้นอื่นแล้ว อย่าเอารูปของชิ้นเก่าไปโชว์
+  if (editingId !== item.id) return;
+  renderPendingImages();
   // ของที่ import มาหรือแก้มือมาอาจมีประเภทที่ไม่อยู่ในลิสต์
   // ตั้ง value เฉย ๆ จะได้ selectedIndex -1 แล้วบันทึกกลับเป็นค่าว่าง
   // ซึ่งแปลว่าผลงานชิ้นนั้นหลุดจากตัวกรองทุกอันโดยไม่มีใครรู้
@@ -189,6 +243,10 @@ function itemCard(item) {
     clearTimeout(armTimer);
     // ลบด้วย id ไม่ใช่ตำแหน่งในลิสต์ — ตำแหน่งเปลี่ยนได้ระหว่างที่ popup เปิดอยู่
     const ok = await mutate((items) => Model.remove(items, item.id), "ลบแล้ว");
+    if (ok) {
+      // รูปไม่ได้อยู่ใน folioItems ต้องลบแยก ไม่งั้นกินที่ค้างตลอด
+      Storage.removeImages(item.id).catch(() => {});
+    }
     // ล้างฟอร์มเฉพาะตอนลบสำเร็จ — ลบไม่ติดแล้วล้าง ผู้ใช้จะเสียของที่พิมพ์ค้างไว้
     if (ok && editingId === item.id) resetForm();
     render(); // วาดใหม่เสมอ ปุ่มจะได้ไม่ค้างอยู่ที่ "แน่ใจ?"
@@ -196,6 +254,14 @@ function itemCard(item) {
 
   actions.append(copyBtn, editBtn, delBtn);
   box.appendChild(actions);
+
+  const n = imageCounts[item.id] || 0;
+  if (n) {
+    const badge = document.createElement("span");
+    badge.className = "img-count";
+    badge.textContent = `🖼 ${n}`;
+    title.appendChild(badge);
+  }
   return box;
 }
 
@@ -214,6 +280,11 @@ async function render(known) {
     return;
   }
   el("empty").textContent = "ยังไม่มีข้อมูล";
+  try {
+    imageCounts = await Storage.getImageCounts();
+  } catch (error) {
+    imageCounts = {}; // นับไม่ได้ก็แค่ไม่โชว์ป้าย ไม่ต้องล้มทั้งหน้า
+  }
 
   // ชิ้นที่กำลังแก้อยู่ถูกลบไปจากที่อื่น — ต้องเลิกแก้
   // ไม่งั้นกด "อัปเดต" แล้ว upsert จะสร้างมันกลับขึ้นมาใหม่เงียบ ๆ
@@ -236,12 +307,14 @@ el("saveBtn").addEventListener("click", async () => {
   }
 
   const wasEditing = editingId;
+  // ชิ้นใหม่ต้องรู้ id ก่อนถึงจะเก็บรูปผูกกับมันได้
+  const targetId = wasEditing || Model.newId();
   const ok = await mutate((items) => {
     const existing = wasEditing ? items.find((i) => i.id === wasEditing) : null;
     return Model.upsert(
       items,
       Model.makeItem(fields, {
-        id: wasEditing || undefined,
+        id: targetId,
         // แก้ไขแล้ววันที่สร้างต้องไม่เปลี่ยน
         now: existing ? existing.createdAt : Date.now(),
       }),
@@ -249,11 +322,44 @@ el("saveBtn").addEventListener("click", async () => {
   }, wasEditing ? "อัปเดตแล้ว" : "บันทึกแล้ว");
 
   if (!ok) return; // เขียนไม่สำเร็จ อย่าล้างฟอร์ม ผู้ใช้จะได้กดใหม่ได้
+
+  try {
+    await Storage.setImages(targetId, pendingImages);
+  } catch (error) {
+    // ข้อความบันทึกติดแล้ว รูปไม่ติด — ต้องบอก ไม่งั้นผู้ใช้นึกว่ารูปอยู่
+    showStatus(`บันทึกข้อความแล้ว แต่เก็บรูปไม่สำเร็จ: ${error.message}`, true);
+    render();
+    return;
+  }
   resetForm();
   render();
 });
 
 el("cancelBtn").addEventListener("click", () => resetForm());
+
+el("imageBtn").addEventListener("click", () => el("imageFile").click());
+
+el("imageFile").addEventListener("change", async (event) => {
+  const files = [...event.target.files];
+  event.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
+  if (!files.length) return;
+  let skipped = 0;
+  for (const file of files) {
+    if (!/^image\/(jpeg|png)$/.test(file.type)) { skipped += 1; continue; }
+    if (file.size > MAX_IMAGE_BYTES) { skipped += 1; continue; }
+    try {
+      pendingImages.push({ name: file.name, type: file.type, data: await readFileAsDataUrl(file) });
+    } catch (error) {
+      skipped += 1;
+    }
+  }
+  renderPendingImages();
+  if (skipped) {
+    showStatus(`ข้ามไป ${skipped} ไฟล์ — รับเฉพาะ JPG/PNG ไม่เกิน 2 MB`, true);
+  } else {
+    showStatus(`แนบรูปแล้ว ${pendingImages.length} ใบ — กดบันทึกเพื่อเก็บ`);
+  }
+});
 
 el("exportBtn").addEventListener("click", async () => {
   try {
