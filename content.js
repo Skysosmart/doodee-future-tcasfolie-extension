@@ -676,14 +676,17 @@
   }
 
   // หาบล็อกที่เป็นของผลงานชิ้นนี้ — จับจากหัวข้อ ไม่ใช่ตำแหน่ง
+  // จับแบบตรงตัวก่อน ถ้าไม่เจอค่อยจับแบบขึ้นต้นเหมือนกัน แต่ต้องเจอ "ชิ้นเดียว"
+  // ในคลังจริงมี SOP สองฉบับที่ 24 ตัวแรกเหมือนกันเป๊ะ — ถ้ายอมเอาตัวแรกที่เจอ
+  // รูปของฉบับมหิดลจะไปลงบล็อกฉบับ SIIT ได้ ซึ่งบนใบสมัครจริงคือความเสียหาย
   function blockFor(item) {
     const want = item.title.trim();
     const all = pageBlocks();
-    return (
-      all.find((b) => b.titleEl.textContent.trim() === want) ||
-      all.find((b) => b.titleEl.textContent.trim().startsWith(want.slice(0, 24))) ||
-      null
-    );
+    const exact = all.find((b) => b.titleEl.textContent.trim() === want);
+    if (exact) return exact;
+    const prefix = want.slice(0, 24);
+    const loose = all.filter((b) => b.titleEl.textContent.trim().startsWith(prefix));
+    return loose.length === 1 ? loose[0] : null; // กำกวม = ไม่เดา
   }
 
   function pageFileInput() {
