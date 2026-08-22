@@ -738,8 +738,12 @@
   }
 
   async function attachImages(item, button) {
-    const found = blockFor(item);
-    if (!found) {
+    // บล็อกของ TCASFolio ถูก React สร้างใหม่ทั้งก้อนหลังเกือบทุก action
+    // (ปิดแผงแก้ไข, กดเพิ่มรูป, อัปโหลด) — reference ที่จับไว้หลุดทันที
+    // จึงห้ามถือ element ไว้ข้าม await: หาใหม่จากหัวข้อทุกครั้งที่จะใช้
+    const live = () => blockFor(item);
+
+    if (!live()) {
       showNote("ยังไม่มีบล็อกของผลงานนี้บนหน้า — เติมข้อความก่อน แล้วค่อยแนบรูป");
       return;
     }
@@ -755,21 +759,34 @@
       showNote("ผลงานนี้ยังไม่มีรูปในคลัง — แนบจากไอคอนส่วนขยายก่อน");
       return;
     }
-
-    const input = pageFileInput();
-    if (!input) {
+    if (!pageFileInput()) {
       showNote("หน้านี้ไม่มีช่องอัปโหลดรูปของ TCASFolio");
       return;
     }
 
+    const realImages = (block) =>
+      [...block.querySelectorAll("img")].filter((i) => /^(blob:|https?:\/\/[^/]*s3[.-])/.test(i.src || ""))
+        .length;
+    const selectBlock = async () => {
+      const b = live();
+      if (!b) return null;
+      b.block.scrollIntoView({ block: "center" });
+      await sleep(250);
+      if (!/is-selected/.test(b.block.className || "")) {
+        b.block.click();
+        await sleep(700);
+      }
+      return live();
+    };
+
     button.disabled = true;
     let done = 0;
     let slotsFull = false;
+    let titleShown = "";
     try {
       await ensureInjected();
 
-      // ปิดแผงแก้ไขก่อน — ตอนแผงเปิดอยู่ คลิกบล็อกไม่ย้าย selection
-      // ปุ่ม "เพิ่มรูป" จะไปทำกับบล็อกที่แผงถืออยู่ แล้วช่องใหม่โผล่ผิดที่
+      // ปิดแผงแก้ไขก่อน — ตอนแผงเปิดอยู่ ปุ่ม "เพิ่มรูป" จะไปทำกับบล็อกที่แผงถือ
       const backBtn = [...document.querySelectorAll("button")].find(
         (b) => b.getClientRects().length && b.textContent.trim() === "←",
       );
@@ -778,69 +795,52 @@
         await sleep(900);
       }
 
-      // เลือกบล็อกให้ชัวร์ก่อน แถบเครื่องมือถึงจะเป็นของบล็อกนี้
-      found.block.scrollIntoView({ block: "center" });
-      await sleep(300);
-      found.block.click();
-      await sleep(700);
-      // ยืนยันว่าเลือกติดจริง ไม่งั้นทุกอย่างหลังจากนี้ไปลงบล็อกอื่น
-      if (!/is-selected/.test(found.block.className || "")) {
-        found.block.click();
-        await sleep(700);
-      }
-
       for (const img of images) {
         button.textContent = `แนบรูป ${done + 1}/${images.length}…`;
 
-        // หาช่องว่างในบล็อกนี้ ถ้าไม่มีกดเพิ่มรูปก่อน
-        // ต้องคลิก .frame__ph (ตัวรับ click ของเว็บ) ไม่ใช่ span ข้อความข้างใน
-        // handler ของเว็บจะตั้ง "เป้าหมาย" ไว้ตอนคลิกนี้ แล้วใช้ครั้งเดียวตอน change
-        let slot = found.block.querySelector(".frame__ph");
-        if (!slot) {
+        let cur = await selectBlock();
+        if (!cur) break;
+        titleShown = cur.titleEl.textContent.trim().slice(0, 30);
+
+        // ไม่มีช่องว่าง → กดเพิ่มรูป แล้ว "หาบล็อกใหม่" เพราะ React สร้างใหม่ทั้งก้อน
+        if (!cur.block.querySelector(".frame__ph")) {
           const add = [...document.querySelectorAll("button")].find(
             (b) => (b.title || "") === "เพิ่มรูป" && b.getClientRects().length,
           );
-          if (!add) break;
+          if (!add) {
+            slotsFull = true;
+            break;
+          }
           add.click();
-          await sleep(1200);
-          slot = found.block.querySelector(".frame__ph");
+          await sleep(1300);
+          cur = live();
+          if (!cur) break;
         }
+        const slot = cur.block.querySelector(".frame__ph");
         if (!slot) {
-          slotsFull = true; // เลย์เอาต์ของบล็อกรับรูปเพิ่มไม่ได้แล้ว
+          slotsFull = true;
           break;
         }
 
-        // วัดว่า "ติด" จากจำนวนรูปจริง (blob:/S3) ที่เพิ่มขึ้น — ไม่ใช่ <img> รวม
-        // (เว็บมี <img> placeholder) และไม่ใช่ช่องว่างที่ลด (เว็บไม่ลบช่องทันที)
-        // สองแบบก่อนหน้ารายงาน 0/N ทั้งที่รูปติดแล้ว วัดจาก snapshot หน้าจริง
-        const realImages = () =>
-          [...found.block.querySelectorAll("img")].filter((i) =>
-            /^(blob:|https?:\/\/[^/]*s3[.-])/.test(i.src || ""),
-          ).length;
-        const realBefore = realImages();
+        const before = realImages(cur.block);
 
-        // เว็บจะเรียก input.click() เปิด dialog จริง — ดักไว้ ไม่งั้นหน้าต่างเลือกไฟล์เด้ง
-        const origClick = input.click;
-        input.click = () => {};
-        try {
-          slot.click();
-          await sleep(400);
-        } finally {
-          input.click = origClick;
-        }
+        // คลิกช่องให้เว็บตั้งเป้าหมาย — เว็บจะเรียก input.click() เปิด dialog จริง
+        // ดักไม่ได้จาก isolated world จึงปล่อยให้เด้ง (เบราว์เซอร์บล็อกเองเพราะไม่มี gesture)
+        slot.click();
+        await sleep(400);
 
-        // ป้อนไฟล์ผ่านตัวช่วยฝั่ง main world — File ต้องเป็นของ realm เว็บ
         const handed = await handToPage(img);
         if (!handed.ok) {
           showNote(`ส่งรูปให้หน้าเว็บไม่ได้: ${handed.why}`);
           break;
         }
 
-        // รอให้อัปโหลดติดจริง — รูปจริงในบล็อกต้องเพิ่ม ไม่ใช่เชื่อว่าสั่งแล้วคือเสร็จ
+        // รอให้รูปจริงเพิ่มในบล็อก — หาบล็อกใหม่ทุกรอบเพราะมันถูกสร้างใหม่ตอนอัปโหลด
         let landed = false;
         for (let tries = 0; tries < 25; tries += 1) {
           await sleep(400);
-          if (realImages() > realBefore) {
+          const b = live();
+          if (b && realImages(b.block) > before) {
             landed = true;
             break;
           }
@@ -854,7 +854,7 @@
     }
 
     if (done === images.length) {
-      showFilled(`แนบรูปแล้ว ${done} ใบ ลงบล็อก «${found.titleEl.textContent.trim().slice(0, 30)}»`);
+      showFilled(`แนบรูปแล้ว ${done} ใบ ลงบล็อก «${titleShown}»`);
       undoBtn.hidden = true; // รูปอัปโหลดขึ้นเซิร์ฟเวอร์แล้ว ย้อนด้วยปุ่มลบรูปของเว็บเอง
     } else if (slotsFull) {
       showNote(
