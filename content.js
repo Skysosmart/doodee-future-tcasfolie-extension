@@ -1,6 +1,7 @@
 // ---------------------------------------------------------
-// แถบด้านข้างบนหน้า TCASFolio — อ่านอย่างเดียว
-// ไม่แตะฟอร์มจริง ไม่แตะข้อมูลที่ verified มีแต่ปุ่มคัดลอกให้เท่านั้น
+// แถบด้านข้างบนหน้า TCASFolio — คัดลอก / เติมฟอร์ม / แนบรูป จากคลังในเครื่อง
+// เขียนลงหน้าเว็บได้ (ตามที่ผู้ใช้ขอ 2026-08-20) แต่: เติมเฉพาะช่องว่าง, ไม่ข้ามบล็อก,
+// ไม่แตะข้อมูลที่ verified, โชว์แผนก่อนเขียนข้อความ, ไม่กดบันทึกแฟ้มให้
 // ---------------------------------------------------------
 (function () {
   "use strict";
@@ -342,8 +343,14 @@
     // (หัวข้อ ระดับ ผลรางวัล หน่วยงาน ชั่วโมง ช่วงเวลา รายละเอียด)
     // การไต่จากหัวข้อตัวแรกจะไปเจอชุดอินไลน์ก่อนแล้วได้แค่ 2 ช่อง
     // จึงเปลี่ยนมาให้คะแนนทุกกล่อง แล้วเลือกกล่องที่กรอกได้ครบชนิดที่สุด
+    // ช่องเรียงความ (free__body--rich) ไม่ใช่ "รายละเอียด" ของผลงานชิ้นไหน
+    // — เคยถูกเลือกเพราะคำว่าเรียงความก็นับเป็น detail และมันว่างอยู่พอดี
+    const isEssay = (el) => /free__body--rich/.test((el.className || "").toString());
+    const allTitles = all.filter((el) => guessKind(el) === "title"); // รวมที่มีข้อความแล้ว
+
     const scopes = new Map();
     for (const el of empty) {
+      if (isEssay(el)) continue;
       let node = el.parentElement;
       for (let d = 0; d < 8 && node; d += 1) {
         if (!scopes.has(node)) scopes.set(node, []);
@@ -352,27 +359,32 @@
       }
     }
 
-    let pool = empty;
+    let pool = empty.filter((el) => !isEssay(el));
+    let chosenContainer = null;
     let bestKinds = -1;
     let bestSize = Infinity;
-    for (const [, fields] of scopes) {
+    for (const [container, fields] of scopes) {
       const kinds = new Set();
-      let titles = 0;
       for (const el of fields) {
         const kind = guessKind(el);
         if (!kind || !values[kind]) continue;
-        if (kind === "title") titles += 1;
         kinds.add(kind);
       }
-      // กล่องที่มีหัวข้อมากกว่าหนึ่ง = คร่อมผลงานหลายชิ้น ห้ามใช้
-      if (titles > 1 || !kinds.size) continue;
+      if (!kinds.size) continue;
+      // กล่องที่ครอบช่องหัวข้อ "ใด ๆ" มากกว่าหนึ่ง — ว่างหรือมีข้อความก็ตาม —
+      // คือกล่องที่คร่อมผลงานหลายชิ้น ห้ามใช้เด็ดขาด (นับเฉพาะที่ว่างไม่พอ:
+      // บล็อกที่กรอกหัวข้อไปแล้วยังเป็นของชิ้นอื่นอยู่ดี)
+      if (allTitles.filter((t) => container.contains(t)).length > 1) continue;
       // ครอบคลุมชนิดได้มากกว่าชนะ ถ้าเท่ากันเอากล่องที่แคบกว่า
       if (kinds.size > bestKinds || (kinds.size === bestKinds && fields.length < bestSize)) {
         bestKinds = kinds.size;
         bestSize = fields.length;
         pool = fields;
+        chosenContainer = container;
       }
     }
+    // ไม่มีกล่องไหนปลอดภัยเลย (ทุกกล่องคร่อมหลายชิ้น) → ไม่เติมอะไร ดีกว่าเดา
+    if (!chosenContainer) pool = [];
 
     const used = new Set();
     const plan = [];
@@ -387,12 +399,22 @@
         previous: readField(el),
         label: fieldLabel(el).slice(0, 34) || "(ช่องไม่มีชื่อ)",
         note: "",
+        // จุดยึดสำหรับหาช่องใหม่หลัง React re-render: กล่องที่เลือก และหัวข้อของมัน
+        anchor: chosenContainer,
+        anchorTitle: "",
       });
     }
 
     // TCASFolio มีแค่หัวข้อกับรายละเอียด ไม่มีช่องหน่วยงาน/ปีแยก
     // ถ้าปล่อยไว้เฉย ๆ ข้อมูลจะหาย จึงเอาไปไว้บรรทัดแรกของรายละเอียด
     // และบอกไว้ในแผนให้เห็น ไม่ใช่แอบต่อให้เงียบ ๆ
+    const titleStep = plan.find((s) => s.kind === "title");
+    for (const s of plan) {
+      // ถ้าแผนเขียนหัวข้อเอง หัวข้อหลังเขียนคือค่านั้น; ถ้าไม่ (กล่องมีหัวข้อแล้ว) อ่านจากกล่อง
+      s.anchorTitle = titleStep
+        ? titleStep.value.trim()
+        : ((chosenContainer && allTitles.find((t) => chosenContainer.contains(t))) ? readField(allTitles.find((t) => chosenContainer.contains(t))).trim() : "");
+    }
     const detailStep = plan.find((s) => s.kind === "detail");
     if (detailStep && item.org && !used.has("org")) {
       detailStep.value = `${item.org}\n\n${item.detail}`;
@@ -454,17 +476,74 @@
   // พอเขียนช่องแรก React จะ re-render บล็อกนั้นใหม่ ตัว element ที่จำไว้ตอนวางแผน
   // จะหลุดออกจากหน้า (isConnected = false) เขียนลงไปก็ไม่มีผลและไม่มีใครรู้
   // จึงต้องหาช่องใหม่จากป้ายชื่อเดิมก่อนเขียนทุกครั้ง
+  // หาช่องใหม่หลัง React สร้างบล็อกใหม่ — ต้องอยู่ "ในกล่องเดิมของแผน" และ "ยังว่าง"
+  // ห้ามหาทั้งหน้าด้วยป้ายชื่ออย่างเดียว: ช่องอินไลน์ทุกบล็อกมีป้ายเหมือนกันหมด
+  // หาทั้งหน้าจะได้บล็อกแรกของหน้า แล้วไปทับของที่คนอื่นกรอกไว้ (review C1)
+  function refind(step) {
+    const anchor = step.anchor; // element ที่ยังติดอยู่ ใช้หากล่องเดิมกลับมา
+    let root = null;
+    if (anchor && anchor.isConnected) root = anchor;
+    if (!root && step.anchorTitle) {
+      // กล่องเดิมหายทั้งก้อน — หาหัวข้อที่ตรงกับตอนวางแผน แล้วใช้ .block ชั้นนอกของมัน
+      // เป็นขอบเขต ห้ามไต่เกินนั้น: ไต่ต่อไปจะเจอกล่องที่ครอบทุกบล็อกบนหน้า แล้วช่อง
+      // "ป้ายเดียวกัน ช่องแรก" ที่เจอคือของบล็อกแรกของหน้า ไม่ใช่ของเรา (review C1, เกิดจริง)
+      const t = [...document.querySelectorAll("[class*=free__title], input, textarea, [contenteditable]")]
+        .filter((f) => !host.contains(f))
+        .find((f) => guessKind(f) === "title" && readField(f).trim() === step.anchorTitle);
+      if (t) {
+        root = outerBlock(t);
+        // หัวข้ออยู่ในแผงแก้ไข (ไม่มี .block ครอบ) → ใช้ฟอร์มที่ใกล้ที่สุดแทน
+        if (!root || root === t.parentElement) root = t.closest("form, fieldset, section, [class*=panel], [class*=editor]") || null;
+      }
+    }
+    if (!root) return null;
+    // จับด้วย "ชนิด" ไม่ใช่ข้อความป้าย — React สร้างบล็อกใหม่แล้ว placeholder attribute
+    // อาจหายหรือย้ายไปอยู่ data-placeholder ทำให้ป้ายไม่ตรงอักษรต่ออักษรทั้งที่เป็นช่องเดียวกัน
+    // (วัดจริง: หัวข้อตรง กล่องถูก ช่องว่างอยู่ แต่ label !== step.label → ไม่เจอ)
+    const inRoot = candidateFields().filter((f) => root.contains(f) && !readField(f).trim());
+    return inRoot.find((f) => guessKind(f) === step.kind && fieldLabel(f) === step.label)
+      || inRoot.find((f) => guessKind(f) === step.kind)
+      || null;
+  }
+
   async function applyPlan(plan) {
     const done = [];
     const failed = [];
 
-    for (const step of plan) {
-      let el = step.el;
-      if (!el.isConnected) {
-        el = candidateFields().find(
-          (f) => fieldLabel(f) === step.label && !readField(f).trim(),
-        );
+    // หลังเขียนช่องก่อนหน้า React จะสร้างบล็อกใหม่ "หลายรอบ" — ถ้าเขียนช่องถัดไปตอน node
+    // กำลังถูกสลับ ข้อความจะหายไปเฉย ๆ (วัดจริง: before connected → after detached, d ว่าง)
+    // จึงรอจนบล็อกนิ่งก่อน: ตัว node ของช่องชนิดนั้นใน anchor ต้องคงเดิม 2 รอบติด
+    const liveFieldFor = (step) => {
+      let root = step.anchor && step.anchor.isConnected ? step.anchor : null;
+      if (!root && step.anchorTitle) {
+        const t = [...document.querySelectorAll("[class*=free__title], input, textarea, [contenteditable]")]
+          .filter((f) => !host.contains(f))
+          .find((f) => guessKind(f) === "title" && readField(f).trim() === step.anchorTitle);
+        root = t ? outerBlock(t) : null;
       }
+      if (!root) return null;
+      return candidateFields().find((f) => root.contains(f) && guessKind(f) === step.kind) || null;
+    };
+    const settle = async (step) => {
+      let prev = liveFieldFor(step);
+      for (let i = 0; i < 10; i += 1) {
+        await new Promise((r) => setTimeout(r, 200));
+        const cur = liveFieldFor(step);
+        if (cur && cur === prev && cur.isConnected) return cur;
+        prev = cur;
+      }
+      return prev && prev.isConnected ? prev : null;
+    };
+
+    for (const [index, step] of plan.entries()) {
+      let el = step.el;
+      if (index > 0) {
+        // ไม่ใช่ช่องแรก → รอให้บล็อกนิ่งก่อน แล้วใช้ node ที่นิ่งแล้วนั้น
+        const stable = await settle(step);
+        if (stable && !readField(stable).trim()) el = stable;
+        else if (stable && readField(stable).trim()) el = null; // ช่องนี้ถูกกรอกไปแล้ว (ไม่ใช่เรา) อย่าทับ
+      }
+      if (el && !el.isConnected) el = refind(step);
       if (!el) {
         failed.push(step.label);
         continue;
@@ -473,20 +552,32 @@
       writeField(el, step.value);
       await new Promise((r) => setTimeout(r, 250));
 
-      // เขียนแล้วต้องเช็คว่าติดจริง ไม่ใช่เชื่อว่าสั่งไปแล้วคือเสร็จ
+      // เขียนแล้วต้องเช็คว่าติดจริง — วัดจริง: React ถอด node ทิ้ง "ระหว่าง" เขียน
+      // (before: connected, after: detached) ข้อความติดอยู่ในบล็อกใหม่ แต่ถ้าอ่านจาก node เก่า
+      // จะได้ค่าว่างแล้วนับว่าพลาดทั้งที่สำเร็จ — จึงต้องหา node ใหม่ "ชนิดเดียวกัน ในกล่องเดิม" มาอ่าน
       let landed = el.isConnected ? readField(el) : "";
       if (!landed.trim()) {
-        const again = candidateFields().find((f) => fieldLabel(f) === step.label);
-        if (again) {
-          writeField(again, step.value);
-          await new Promise((r) => setTimeout(r, 250));
-          landed = readField(again);
-          el = again;
+        const sameKind = (f) => guessKind(f) === step.kind;
+        let again = null;
+        if (step.anchor && step.anchor.isConnected) {
+          again = candidateFields().find((f) => step.anchor.contains(f) && sameKind(f));
         }
+        if (!again && step.anchorTitle) {
+          // กล่องเดิมหายทั้งก้อน → หากล่องใหม่จากหัวข้อ (ขอบเขต .block ของมันเท่านั้น)
+          const t = [...document.querySelectorAll("[class*=free__title], input, textarea, [contenteditable]")]
+            .filter((f) => !host.contains(f))
+            .find((f) => guessKind(f) === "title" && readField(f).trim() === step.anchorTitle);
+          const root = t ? outerBlock(t) : null;
+          if (root) again = candidateFields().find((f) => root.contains(f) && sameKind(f));
+        }
+        if (again) { landed = readField(again); el = again; }
       }
 
-      if (landed.trim()) done.push({ el, previous: step.previous });
-      else failed.push(step.label);
+      if (landed.trim() === step.value.trim() || (landed.trim() && landed.includes(step.value.slice(0, 20)))) {
+        done.push({ el, previous: step.previous });
+      } else {
+        failed.push(step.label);
+      }
     }
 
     lastFill = done;
@@ -554,6 +645,9 @@
       return;
     }
     if (el.isContentEditable) {
+      // ช่องของ TCASFolio เป็น click-to-edit (มี data-edit) — focus() เฉย ๆ จาก isolated world
+      // ไม่พอ: หัวข้อติด แต่รายละเอียดไม่ติด จนกว่าจะมี click จริงก่อน
+      el.click();
       el.focus();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -585,8 +679,25 @@
     clearNote();
   });
 
-  confirmBtn.addEventListener("click", () => {
-    if (pendingPlan) applyPlan(pendingPlan);
+  let applying = false;
+  confirmBtn.addEventListener("click", async () => {
+    if (!pendingPlan || applying) return;
+    const plan = pendingPlan;
+    // แผนที่วางไว้ตอนแผงแก้ไขเปิด แล้วมากดยืนยันหลังแผงปิด — กล่องเดิมหายทั้งก้อน
+    // ห้ามเอาแผนเก่าไปหาช่องทั้งหน้า ให้บอกผู้ใช้กดวางแผนใหม่
+    if (plan.some((s) => !s.el.isConnected) && !(plan[0].anchor && plan[0].anchor.isConnected)) {
+      pendingPlan = null;
+      showNote("หน้าเปลี่ยนไปตั้งแต่วางแผน — กด \"เติมทั้งฟอร์ม\" อีกครั้งเพื่อวางแผนใหม่");
+      return;
+    }
+    applying = true;
+    confirmBtn.disabled = true;
+    try {
+      await applyPlan(plan);
+    } finally {
+      applying = false;
+      confirmBtn.disabled = false;
+    }
   });
 
   cancelBtn.addEventListener("click", () => {
@@ -681,12 +792,10 @@
   // รูปของฉบับมหิดลจะไปลงบล็อกฉบับ SIIT ได้ ซึ่งบนใบสมัครจริงคือความเสียหาย
   function blockFor(item) {
     const want = item.title.trim();
-    const all = pageBlocks();
-    const exact = all.find((b) => b.titleEl.textContent.trim() === want);
-    if (exact) return exact;
-    const prefix = want.slice(0, 24);
-    const loose = all.filter((b) => b.titleEl.textContent.trim().startsWith(prefix));
-    return loose.length === 1 ? loose[0] : null; // กำกวม = ไม่เดา
+    if (!want) return null;
+    // ตรงตัวเท่านั้น — การจับแบบขึ้นต้นเหมือนกันเคยชี้ผิดบล็อกได้แม้เหลือผู้สมัครคนเดียว
+    // (SOP สองฉบับ ถ้ามีบล็อกฉบับเดียวบนหน้า ก็จะจับเป็นของอีกฉบับ) รูปขึ้น S3 แล้วถอนไม่ได้
+    return pageBlocks().find((b) => b.titleEl.textContent.trim() === want) || null;
   }
 
   function pageFileInput() {
@@ -740,7 +849,22 @@
     });
   }
 
+  let attachBusy = false; // เว็บมี input รูปตัวเดียวใช้ร่วมกัน สองลูปพร้อมกัน = รูปไขว้บล็อก
+
   async function attachImages(item, button) {
+    if (attachBusy) {
+      showNote("กำลังแนบรูปของอีกชิ้นอยู่ รอให้เสร็จก่อน");
+      return;
+    }
+    attachBusy = true;
+    try {
+      await attachImagesInner(item, button);
+    } finally {
+      attachBusy = false;
+    }
+  }
+
+  async function attachImagesInner(item, button) {
     // บล็อกของ TCASFolio ถูก React สร้างใหม่ทั้งก้อนหลังเกือบทุก action
     // (ปิดแผงแก้ไข, กดเพิ่มรูป, อัปโหลด) — reference ที่จับไว้หลุดทันที
     // จึงห้ามถือ element ไว้ข้าม await: หาใหม่จากหัวข้อทุกครั้งที่จะใช้
@@ -790,9 +914,13 @@
       await ensureInjected();
 
       // ปิดแผงแก้ไขก่อน — ตอนแผงเปิดอยู่ ปุ่ม "เพิ่มรูป" จะไปทำกับบล็อกที่แผงถือ
-      const backBtn = [...document.querySelectorAll("button")].find(
-        (b) => b.getClientRects().length && b.textContent.trim() === "←",
-      );
+      // หาเฉพาะปุ่ม ← ที่อยู่ในแผงแก้ไข (มีช่อง "ระดับ"/"ผลรางวัล" อยู่ด้วย) ไม่ใช่ทั้งหน้า:
+      // ปุ่ม ← ลอย ๆ ของเว็บอาจเป็นปุ่มย้อนกลับออกจากฟอร์ม กดแล้วของที่กรอกไว้หายหมด
+      const backBtn = [...document.querySelectorAll("button")].find((b) => {
+        if (!b.getClientRects().length || b.textContent.trim() !== "←") return false;
+        const panel = b.closest("[class*=panel], [class*=editor], [class*=drawer], aside, form");
+        return !!panel && /ระดับ|ผลรางวัล|หน่วยงานที่จัด/.test(panel.textContent || "");
+      });
       if (backBtn) {
         backBtn.click();
         await sleep(900);
@@ -804,6 +932,8 @@
         let cur = await selectBlock();
         if (!cur) break;
         titleShown = cur.titleEl.textContent.trim().slice(0, 30);
+        // บอกเป้าหมายก่อนอัปโหลดใบแรก — รูปขึ้นเซิร์ฟเวอร์แล้วถอนจากตรงนี้ไม่ได้
+        if (done === 0) showNote(`กำลังแนบรูป ${images.length} ใบ ลงบล็อก «${titleShown}»…`);
 
         // ไม่มีช่องว่าง → กดเพิ่มรูป แล้ว "หาบล็อกใหม่" เพราะ React สร้างใหม่ทั้งก้อน
         if (!cur.block.querySelector(".frame__ph")) {
