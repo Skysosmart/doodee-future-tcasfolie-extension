@@ -12,6 +12,9 @@
   // ถ้ารวมไว้ใน folioItems ทุกครั้งที่แก้แท็กตัวเดียว onChanged จะยิงทั้งก้อน
   // คีย์รูปคือ img:<itemId> เก็บเป็น array ของ { name, type, data }
   const IMAGE_PREFIX = "img:";
+  // ดัชนีจำนวนรูปต่อชิ้น { itemId: count } — ให้การ์ดโชว์ป้ายได้โดยไม่ต้องดึง base64
+  // ทุกใบขึ้นมาเทียบ (get(null) ดึงทุกคีย์รวมรูปหลายสิบ MB ทุกครั้งที่วาดใหม่)
+  const IMAGE_INDEX_KEY = "imgIndex";
 
   // ย้ายข้อมูลรุ่นเก่าที่ยังไม่มี id — เกิดครั้งเดียวแล้วจบ
   // panel ส่ง { migrate: false } เพราะถ้าสอง context อ่านพร้อมกันตอนยังไม่มี id
@@ -55,38 +58,58 @@
     return Array.isArray(data[key]) ? data[key] : [];
   }
 
+  async function readIndex() {
+    const data = await chrome.storage.local.get(IMAGE_INDEX_KEY);
+    const idx = data[IMAGE_INDEX_KEY];
+    return idx && typeof idx === "object" ? { ...idx } : {};
+  }
+
+  async function writeIndexEntry(itemId, count) {
+    const idx = await readIndex();
+    if (count > 0) idx[itemId] = count;
+    else delete idx[itemId];
+    await chrome.storage.local.set({ [IMAGE_INDEX_KEY]: idx });
+  }
+
   async function setImages(itemId, images) {
     const key = IMAGE_PREFIX + itemId;
     if (!images.length) {
       await chrome.storage.local.remove(key);
-      return;
+    } else {
+      await chrome.storage.local.set({ [key]: images });
     }
-    await chrome.storage.local.set({ [key]: images });
+    await writeIndexEntry(itemId, images.length);
   }
 
-  // นับรูปของทุกชิ้นทีเดียว ให้การ์ดโชว์ได้ว่าชิ้นไหนมีรูปกี่ใบ
-  // โดยไม่ต้องโหลด base64 ทั้งหมดขึ้นมา — อ่านคีย์ทั้งหมดแล้วนับความยาว
+  // นับรูปของทุกชิ้นจากดัชนี — ไม่ต้องดึง base64 สักไบต์
+  // ถ้าดัชนีไม่มี (คลังที่มีรูปจากรุ่นก่อนหน้า) สร้างขึ้นครั้งเดียวจากคีย์จริง
   async function getImageCounts() {
-    const all = await chrome.storage.local.get(null);
+    const data = await chrome.storage.local.get(IMAGE_INDEX_KEY);
+    if (data[IMAGE_INDEX_KEY] && typeof data[IMAGE_INDEX_KEY] === "object") {
+      return { ...data[IMAGE_INDEX_KEY] };
+    }
+    const all = await chrome.storage.local.get(null); // ครั้งเดียวตอนย้ายรุ่น
     const counts = {};
     for (const key of Object.keys(all)) {
       if (!key.startsWith(IMAGE_PREFIX)) continue;
       const list = all[key];
-      counts[key.slice(IMAGE_PREFIX.length)] = Array.isArray(list) ? list.length : 0;
+      if (Array.isArray(list) && list.length) counts[key.slice(IMAGE_PREFIX.length)] = list.length;
     }
+    await chrome.storage.local.set({ [IMAGE_INDEX_KEY]: counts });
     return counts;
   }
 
   // ลบผลงานแล้วรูปของมันต้องไปด้วย ไม่งั้นกินที่ค้างไว้ตลอด
   async function removeImages(itemId) {
     await chrome.storage.local.remove(IMAGE_PREFIX + itemId);
+    await writeIndexEntry(itemId, 0);
   }
 
   function onImagesChanged(callback) {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
-      const touched = Object.keys(changes).filter((k) => k.startsWith(IMAGE_PREFIX));
-      if (touched.length) callback(touched.map((k) => k.slice(IMAGE_PREFIX.length)));
+      // ฟังที่ดัชนีพอ — มันเปลี่ยนทุกครั้งที่รูปเปลี่ยน และตัวมันเล็ก
+      if (changes[IMAGE_INDEX_KEY]) callback(Object.keys(changes[IMAGE_INDEX_KEY].newValue || {}));
     });
   }
 
@@ -94,6 +117,7 @@
     ITEMS_KEY,
     PANEL_KEY,
     IMAGE_PREFIX,
+    IMAGE_INDEX_KEY,
     getItems,
     setItems,
     onItemsChanged,

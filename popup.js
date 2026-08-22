@@ -76,6 +76,11 @@ function readForm() {
 
 // รูปที่แนบไว้กับฟอร์มตอนนี้ (ยังไม่บันทึก) — [{ name, type, data }]
 let pendingImages = [];
+// true เมื่อผู้ใช้แตะรูปในฟอร์มรอบนี้ (เพิ่ม/ลบ) — ถ้าไม่แตะ ห้ามเขียนทับรูปเดิมตอนบันทึก
+// ไม่งั้น "โหลดรูปไม่ได้" ครั้งเดียวจะกลายเป็นลบรูปทั้งชุดตอนกดอัปเดตแก้คำผิด
+let imagesTouched = false;
+// true ระหว่างโหลดรูปของชิ้นที่แก้อยู่ — ระหว่างนี้บันทึกไม่ได้ กันทับของที่ยังไม่รู้ค่า
+let imagesLoading = false;
 let imageCounts = {};
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // เกียรติบัตรถ่ายมือถือปกติไม่ถึง
@@ -105,6 +110,7 @@ function renderPendingImages() {
       remove.title = "เอารูปนี้ออก";
       remove.addEventListener("click", () => {
         pendingImages.splice(index, 1);
+        imagesTouched = true;
         renderPendingImages();
       });
       box.append(pic, remove);
@@ -119,6 +125,8 @@ function renderPendingImages() {
 function resetForm() {
   editingId = null;
   pendingImages = [];
+  imagesTouched = false;
+  imagesLoading = false;
   renderPendingImages();
   for (const option of [...el("type").querySelectorAll("[data-foreign]")]) {
     option.remove();
@@ -134,14 +142,26 @@ function resetForm() {
 async function startEditing(item) {
   editingId = item.id;
   pendingImages = [];
+  imagesTouched = false;
+  imagesLoading = true;
   renderPendingImages();
+  let loaded = null;
+  let loadError = null;
   try {
-    pendingImages = await Storage.getImages(item.id);
+    loaded = await Storage.getImages(item.id);
   } catch (error) {
-    showStatus(`โหลดรูปไม่ได้: ${error.message}`, true);
+    loadError = error;
   }
-  // ระหว่างรอโหลด ผู้ใช้อาจกดไปชิ้นอื่นแล้ว อย่าเอารูปของชิ้นเก่าไปโชว์
+  // ระหว่างรอโหลด ผู้ใช้อาจกดไปชิ้นอื่น/ยกเลิกแล้ว — ห้ามเอาผลมาวางลงตัวแปรเด็ดขาด
+  // ไม่งั้นรูปของชิ้น A จะไปติดกับชิ้นที่บันทึกถัดไป (เคยพบใน review)
   if (editingId !== item.id) return;
+  imagesLoading = false;
+  if (loadError) {
+    // โหลดไม่ได้ ≠ ไม่มีรูป — ปล่อย pendingImages ว่างแต่ห้ามเขียนทับตอนบันทึก
+    showStatus(`โหลดรูปไม่ได้: ${loadError.message} — บันทึกได้ แต่รูปเดิมจะไม่ถูกแตะ`, true);
+  } else {
+    pendingImages = loaded;
+  }
   renderPendingImages();
   // ของที่ import มาหรือแก้มือมาอาจมีประเภทที่ไม่อยู่ในลิสต์
   // ตั้ง value เฉย ๆ จะได้ selectedIndex -1 แล้วบันทึกกลับเป็นค่าว่าง
@@ -306,6 +326,11 @@ el("saveBtn").addEventListener("click", async () => {
     return;
   }
 
+  if (imagesLoading) {
+    showStatus("กำลังโหลดรูปของผลงานนี้อยู่ รอสักครู่แล้วกดบันทึกอีกที", true);
+    return;
+  }
+
   const wasEditing = editingId;
   // ชิ้นใหม่ต้องรู้ id ก่อนถึงจะเก็บรูปผูกกับมันได้
   const targetId = wasEditing || Model.newId();
@@ -323,13 +348,21 @@ el("saveBtn").addEventListener("click", async () => {
 
   if (!ok) return; // เขียนไม่สำเร็จ อย่าล้างฟอร์ม ผู้ใช้จะได้กดใหม่ได้
 
-  try {
-    await Storage.setImages(targetId, pendingImages);
-  } catch (error) {
-    // ข้อความบันทึกติดแล้ว รูปไม่ติด — ต้องบอก ไม่งั้นผู้ใช้นึกว่ารูปอยู่
-    showStatus(`บันทึกข้อความแล้ว แต่เก็บรูปไม่สำเร็จ: ${error.message}`, true);
-    render();
-    return;
+  // เขียนรูปเฉพาะตอนผู้ใช้แตะรูปจริง ๆ — แก้แค่ข้อความแล้วรูปเดิมต้องอยู่เหมือนเดิม
+  if (imagesTouched) {
+    try {
+      await Storage.setImages(targetId, pendingImages);
+    } catch (error) {
+      // ข้อความติดแล้วแต่รูปไม่ติด — ล็อกฟอร์มไว้ที่ชิ้นนี้ (editingId = targetId)
+      // ไม่งั้นกดบันทึกซ้ำจะสุ่ม id ใหม่แล้วได้ผลงานซ้ำสองชิ้น
+      editingId = targetId;
+      el("formHeading").textContent = "แก้ไขผลงาน";
+      el("saveBtn").textContent = "อัปเดต";
+      el("cancelBtn").hidden = false;
+      showStatus(`บันทึกข้อความแล้ว แต่เก็บรูปไม่สำเร็จ: ${error.message} — กดอัปเดตอีกครั้งเพื่อลองใหม่`, true);
+      render();
+      return;
+    }
   }
   resetForm();
   render();
@@ -349,6 +382,7 @@ el("imageFile").addEventListener("change", async (event) => {
     if (file.size > MAX_IMAGE_BYTES) { skipped += 1; continue; }
     try {
       pendingImages.push({ name: file.name, type: file.type, data: await readFileAsDataUrl(file) });
+      imagesTouched = true;
     } catch (error) {
       skipped += 1;
     }
