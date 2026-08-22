@@ -1,0 +1,187 @@
+<title>Doodee future — วิธีใช้</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mali:wght@500;600;700&family=Sarabun:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #f7f6f2; --card: #ffffff; --ink: #1b1f2a; --muted: #5c6170; --line: #d9d6cc;
+    --accent: #1f6f5c; --accent-soft: #e4f0ec; --warn: #b3451f; --warn-soft: #f8e8e1;
+    --key-bg: #eceae3; --key-ink: #2a2f3a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14161a; --card: #1d2027; --ink: #e9eaee; --muted: #9aa0ad; --line: #2b2f38;
+      --accent: #63b177; --accent-soft: #1b2a1e; --warn: #f0b8b8; --warn-soft: #2a1d1d;
+      --key-bg: #2a2e38; --key-ink: #e9eaee;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14161a; --card: #1d2027; --ink: #e9eaee; --muted: #9aa0ad; --line: #2b2f38;
+    --accent: #63b177; --accent-soft: #1b2a1e; --warn: #f0b8b8; --warn-soft: #2a1d1d;
+    --key-bg: #2a2e38; --key-ink: #e9eaee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+    font-size: 17px; line-height: 1.7;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 96px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+  @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; gap: 24px; } nav.rail { position: static; } }
+  nav.rail { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+  nav.rail .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  nav.rail a { display: block; color: var(--ink); text-decoration: none; padding: 6px 0 6px 12px; border-left: 2px solid var(--line); }
+  nav.rail a:hover, nav.rail a:focus-visible { border-left-color: var(--accent); color: var(--accent); outline: none; }
+  nav.rail a.warn { color: var(--warn); }
+  header h1 { font-family: "Mali", "Noto Sans Thai", sans-serif; font-weight: 700; font-size: 40px; line-height: 1.15; margin: 0 0 8px; text-wrap: balance; }
+  header p.lede { font-size: 19px; color: var(--muted); margin: 0 0 8px; max-width: 60ch; }
+  header .meta { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  main { max-width: 68ch; }
+  h2 { font-family: "Mali", "Noto Sans Thai", sans-serif; font-weight: 600; font-size: 26px; margin: 56px 0 14px; line-height: 1.25; text-wrap: balance; scroll-margin-top: 24px; }
+  h3 { font-family: "Mali", "Noto Sans Thai", sans-serif; font-weight: 600; font-size: 19px; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  kbd {
+    font-family: "IBM Plex Mono", monospace; font-size: .82em; font-weight: 500;
+    background: var(--key-bg); color: var(--key-ink); border: 1px solid var(--line); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 7px; white-space: nowrap;
+  }
+  ol.steps { list-style: none; padding: 0; margin: 18px 0; counter-reset: step; display: grid; gap: 12px; }
+  ol.steps > li {
+    counter-increment: step; position: relative; background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 16px 18px 16px 60px;
+  }
+  ol.steps > li::before {
+    content: counter(step); position: absolute; left: 16px; top: 14px; width: 30px; height: 30px;
+    border-radius: 15px; background: var(--accent); color: #fff; font-family: "IBM Plex Mono", monospace;
+    font-weight: 500; font-size: 14px; display: grid; place-items: center;
+  }
+  ol.steps > li strong { display: block; font-weight: 600; margin-bottom: 2px; }
+  ol.steps > li small { color: var(--muted); font-size: 15px; }
+  .note, .warn { border-radius: 8px; padding: 14px 18px; margin: 18px 0; font-size: 16px; }
+  .note { background: var(--accent-soft); border-left: 4px solid var(--accent); }
+  .warn { background: var(--warn-soft); border-left: 4px solid var(--warn); }
+  .note b, .warn b { font-family: "Mali", "Noto Sans Thai", sans-serif; font-weight: 600; }
+  .warn b { color: var(--warn); }
+  .note b { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0 22px; font-size: 15.5px; }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td:first-child { white-space: nowrap; }
+  .pill { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: .06em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); vertical-align: middle; }
+  .pill.you { border-color: var(--warn); color: var(--warn); }
+  .pill.ext { border-color: var(--accent); color: var(--accent); }
+  ul.plain { padding-left: 20px; margin: 8px 0 14px; }
+  ul.plain li { margin: 4px 0; }
+  footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  @media (prefers-reduced-motion: no-preference) { nav.rail a { transition: color .15s, border-color .15s; } }
+</style>
+
+<div class="wrap">
+  <nav class="rail" aria-label="สารบัญ">
+    <div class="eyebrow">วิธีใช้</div>
+    <a href="#install">ติดตั้ง</a>
+    <a href="#vault">1 · ใส่ผลงานเข้าคลัง</a>
+    <a href="#images">2 · แนบรูปเกียรติบัตร</a>
+    <a href="#fill">3 · กรอกลง TCASFolio</a>
+    <a href="#attach">4 · ส่งรูปลงบล็อก</a>
+    <a href="#who">ใครทำอะไร</a>
+    <a href="#backup">สำรองข้อมูล</a>
+    <a href="#safety" class="warn">ระวัง — อ่านก่อนใช้จริง</a>
+    <a href="#fix">ถ้าเจอปัญหา</a>
+  </nav>
+
+  <main>
+    <header>
+      <h1>Doodee future</h1>
+      <p class="lede">เก็บผลงานจากเล่ม portfolio ไว้ในเครื่องครั้งเดียว แล้วกรอกลง TCASFolio ได้ทุกแฟ้ม ทุกมหาวิทยาลัย โดยไม่ต้องพิมพ์ซ้ำ</p>
+      <div class="meta">Chrome · ใช้กับ student.mytcas.com · ข้อมูลอยู่ในเครื่องเท่านั้น ไม่ส่งไปไหน</div>
+    </header>
+
+    <div class="warn" id="top-warn">
+      <b>สิ่งเดียวที่ต้องจำ:</b> TCASFolio ไม่บันทึกเอง สิ่งที่ extension กรอกให้จะหายถ้าปิดหน้าโดยไม่กด <kbd>บันทึกแฟ้ม</kbd> (ปุ่มสีน้ำเงินมุมขวาบนของเว็บ) — กดบ่อย ๆ ระหว่างทำ ไม่ใช่รอจนเสร็จ
+    </div>
+
+    <h2 id="install">ติดตั้ง</h2>
+    <ol class="steps">
+      <li><strong>เปิด <kbd>chrome://extensions</kbd></strong><small>เปิด <b>Developer mode</b> ที่มุมขวาบน</small></li>
+      <li><strong>กด <kbd>Load unpacked</kbd></strong><small>เลือกโฟลเดอร์ <code>TCASFolio Extension</code> ที่มีไฟล์ <code>manifest.json</code></small></li>
+      <li><strong>ปักหมุดไอคอนไว้ที่แถบเครื่องมือ</strong><small>จะได้กดเปิดคลังได้ทันที</small></li>
+    </ol>
+    <p>รองรับ Chrome / Chromium / Edge / Brave — ไม่รองรับ Firefox และ Safari</p>
+
+    <h2 id="vault">1 · ใส่ผลงานเข้าคลัง</h2>
+    <p>ทำครั้งเดียวจากเล่ม portfolio เดิม กดไอคอน extension แล้วกรอกทีละชิ้น</p>
+    <div class="tablewrap"><table>
+      <tr><th>ช่อง</th><th>ใส่อะไร</th></tr>
+      <tr><td>ประเภท</td><td>เลือก 1 ใน 5 — ตรงกับปุ่ม <kbd>＋ เพิ่ม…</kbd> ของ TCASFolio เป๊ะ: รางวัล/เกียรติบัตร · โครงงาน/วิจัย · กิจกรรม · การอบรม · ผลงานสร้างสรรค์</td></tr>
+      <tr><td>ชื่อผลงาน</td><td>ชื่อเต็มตามเกียรติบัตร <b>(ต้องมี)</b> — ใช้จับคู่บล็อกตอนแนบรูป ต้องตรงกับที่กรอกลงเว็บ</td></tr>
+      <tr><td>หน่วยงาน / ปี</td><td>เขียนรวมกันคั่นด้วย <code> · </code> เช่น <code>สำนักงานการวิจัยแห่งชาติ (วช.) · 9 มกราคม 2569</code> — ตอนกรอกมันจะแยกให้ลงช่อง "หน่วยงานที่จัด" กับ "ช่วงเวลา/วันที่" เอง</td></tr>
+      <tr><td>ระดับ</td><td>เลือกจากลิสต์ (โรงเรียน/สถาบัน · จังหวัด/เขต/ภาค · ชาติ · นานาชาติ) — คำเดียวกับในเว็บ ใส่อย่างอื่นไม่ได้</td></tr>
+      <tr><td>ผลรางวัล / อันดับ</td><td>เช่น <code>เหรียญทอง</code> <code>อันดับที่ 3</code> <code>เข้าร่วม</code></td></tr>
+      <tr><td>จำนวนชั่วโมง</td><td>ถ้ามี (การอบรม/คอร์ส)</td></tr>
+      <tr><td>แท็ก</td><td>คั่นด้วยจุลภาค เช่น <code>Cybersecurity, มหิดล</code> — ไว้กรองในแถบข้างบนเว็บ</td></tr>
+      <tr><td>รายละเอียด</td><td>ข้อความยาวที่จะลงช่อง "รายละเอียด" ของเว็บ</td></tr>
+    </table></div>
+    <p>กด <kbd>บันทึกลงคลัง</kbd> · แก้ทีหลังกด <kbd>แก้ไข</kbd> ที่การ์ด · ลบต้องกด <kbd>ลบ</kbd> สองครั้ง (ครั้งแรกถามว่า <kbd>แน่ใจ?</kbd>)</p>
+    <div class="note"><b>มีเล่ม PDF อยู่แล้ว?</b> ไม่ต้องพิมพ์ — ให้ Claude อ่านไฟล์แล้วแปลงเป็น JSON ให้ แล้วกด <kbd>นำเข้า JSON</kbd> ทีเดียว (ผลงาน 44 ชิ้นจากเล่ม 18 หน้า ใช้เวลาไม่กี่นาที)</div>
+
+    <h2 id="images">2 · แนบรูปเกียรติบัตรไว้กับผลงาน</h2>
+    <p>ในฟอร์มของแต่ละผลงาน กด <kbd>＋ แนบรูป</kbd> เลือกได้หลายไฟล์ (JPG/PNG ไม่เกิน 2 MB ต่อใบ) เห็น thumbnail ทันที กด <kbd>×</kbd> บนรูปเพื่อเอาออก แล้วกด <kbd>บันทึกลงคลัง</kbd></p>
+    <p>รูปเก็บในเครื่องผูกกับผลงานชิ้นนั้น ใช้ซ้ำได้ทุกแฟ้ม ลบผลงานแล้วรูปถูกลบตาม การ์ดที่มีรูปจะขึ้นป้าย 🖼 พร้อมจำนวน</p>
+
+    <h2 id="fill">3 · กรอกลง TCASFolio</h2>
+    <p>เปิด <code>student.mytcas.com</code> เข้าแฟ้มที่จะทำ จะเห็นปุ่มเล็ก ๆ <kbd>▸</kbd> กลางขอบขวาของจอ — นั่นคือคลังผลงาน (เริ่มที่ย่อไว้ จะได้ไม่บังปุ่มของเว็บ) กดเพื่อกาง</p>
+    <ol class="steps">
+      <li><strong>กด <kbd>＋ เพิ่มรางวัล</kbd> (หรือโครงงาน / กิจกรรม / การอบรม / ผลงาน) ในเว็บ</strong><small>เว็บจะสร้างบล็อกเปล่าให้หนึ่งบล็อก</small></li>
+      <li><strong>คลิกหัวของบล็อกใหม่ เพื่อเปิดแผงแก้ไขด้านซ้าย</strong><small>ขั้นนี้สำคัญ — ถ้าไม่เปิดแผง จะกรอกได้แค่หัวข้อกับรายละเอียด ถ้าเปิดจะได้ครบ 6 ช่อง</small></li>
+      <li><strong>ในแถบคลัง หาผลงานชิ้นนั้น กด <kbd>เติมทั้งฟอร์ม</kbd></strong><small>จะขึ้น "แผน" ว่าอะไรจะลงช่องไหน — <b>ยังไม่เขียนอะไรลงไป</b> ถ้าเห็นแปลก ๆ กด <kbd>ยกเลิก</kbd></small></li>
+      <li><strong>กด <kbd>ยืนยันเติม</kbd></strong><small>ลงให้ครบ: หัวข้อ · ระดับ · ผลรางวัล · หน่วยงานที่จัด · ช่วงเวลา/วันที่ · รายละเอียด — ถ้าผิดกด <kbd>ย้อนกลับ</kbd> คืนทุกช่องพร้อมกัน</small></li>
+      <li><strong>ติ๊ก <kbd>ค่าใช้จ่าย</kbd> เอง แล้วกด <kbd>บันทึกแฟ้ม</kbd></strong><small>ค่าใช้จ่ายไม่มีในคลังและเดาแทนไม่ได้ · บันทึกแฟ้มเป็นปุ่มของเว็บ extension จะไม่กดให้</small></li>
+    </ol>
+    <p>อยากกรอกทีละช่องแทน: คลิกช่องในเว็บก่อน แล้วกดปุ่ม <kbd>ชื่อ</kbd> <kbd>หน่วยงาน</kbd> <kbd>รายละเอียด</kbd> ในการ์ด — ถ้าช่องมีข้อความอยู่แล้ว ปุ่มจะเปลี่ยนเป็น <kbd>ทับของเดิม?</kbd> ต้องกดซ้ำ</p>
+    <p>หรือแค่ <kbd>คัดลอกรายละเอียด</kbd> แล้ว Ctrl+V เอง — วิธีเดิมยังอยู่</p>
+
+    <h2 id="attach">4 · ส่งรูปลงบล็อก</h2>
+    <p>หลังเติมข้อความลงบล็อกแล้ว (หัวข้อในเว็บต้องตรงกับชื่อผลงานในคลังเป๊ะ) กด <kbd>แนบรูป (N)</kbd> ในการ์ดเดียวกัน รูปจะทยอยขึ้นทีละใบ รอจนเสร็จ — ปุ่มจะบอกว่าแนบใบที่เท่าไหร่</p>
+    <div class="warn"><b>รูปถอนไม่ได้จากฝั่ง extension</b> — พอขึ้นแล้วอยู่บนเซิร์ฟเวอร์ของ TCAS ทันที ถ้าผิดบล็อกให้ใช้ปุ่ม "ลบรูป" ของเว็บเอง ระบบจึงบอกชื่อบล็อกเป้าหมายก่อนใบแรกขึ้น และถ้าหาบล็อกที่ชื่อตรงไม่เจอจะ<b>ไม่เดา</b></div>
+    <p>ถ้าบล็อกบอกว่ารับรูปเพิ่มไม่ได้ ให้เปลี่ยนเลย์เอาต์รูปในแถบเครื่องมือของบล็อก (เช่น "2 รูป" / "3 รูป") แล้วกดแนบซ้ำ</p>
+
+    <h2 id="who">ใครทำอะไร</h2>
+    <div class="tablewrap"><table>
+      <tr><th>งาน</th><th>ใคร</th><th>ทำไม</th></tr>
+      <tr><td>กด ＋ เพิ่มบล็อก / เปิดแผงแก้ไข</td><td><span class="pill you">มึง</span></td><td>เว็บต้องเห็นว่าคนเป็นคนสร้าง</td></tr>
+      <tr><td>หัวข้อ · ระดับ · ผลรางวัล · หน่วยงาน · วันที่ · รายละเอียด</td><td><span class="pill ext">extension</span></td><td>ตามข้อมูลในคลัง ผ่านแผน → ยืนยัน</td></tr>
+      <tr><td>รูปเกียรติบัตร</td><td><span class="pill ext">extension</span></td><td>ลงบล็อกที่ชื่อตรงเท่านั้น</td></tr>
+      <tr><td>ค่าใช้จ่าย · ลำดับบล็อก · เลย์เอาต์รูป</td><td><span class="pill you">มึง</span></td><td>ไม่มีข้อมูลนี้ในคลัง / เป็นการตัดสินใจ</td></tr>
+      <tr><td>กด บันทึกแฟ้ม</td><td><span class="pill you">มึง</span></td><td>จังหวะส่งข้อมูลเข้าใบสมัครจริง ตั้งใจให้เป็นมึง</td></tr>
+    </table></div>
+
+    <h2 id="backup">สำรองข้อมูล</h2>
+    <p><kbd>ส่งออก JSON</kbd> ในป๊อปอัป ได้ไฟล์ <code>doodee-future-YYYY-MM-DD.json</code> — ทำหลังใส่ผลงานเสร็จทุกครั้ง เพราะคลังอยู่ใน Chrome profile ล้างเบราว์เซอร์/ถอน extension แล้วหาย</p>
+    <p><kbd>นำเข้า JSON</kbd> รวมเข้าคลัง (ไม่ทับทั้งก้อน) แล้วบอกว่าเพิ่มกี่ชิ้น อัปเดตกี่ชิ้น</p>
+    <div class="warn"><b>JSON ไม่มีรูป</b> — ไฟล์ส่งออกเก็บแค่ข้อความ เก็บไฟล์รูปเกียรติบัตรต้นฉบับไว้ในโฟลเดอร์ต่างหากด้วย แล้วค่อยแนบใหม่หลังนำเข้า</div>
+
+    <h2 id="safety">ระวัง — อ่านก่อนใช้จริง</h2>
+    <ul class="plain">
+      <li><b>กด บันทึกแฟ้ม บ่อย ๆ</b> — ทุกอย่างที่ extension ทำ เว็บยังไม่ได้บันทึกจนกว่าจะกดปุ่มนี้ ปิดแท็บ/รีเฟรชก่อน = หายหมด</li>
+      <li><b>เติมเฉพาะช่องว่าง</b> — ช่องที่มีข้อความแล้วระบบข้าม (แผนจะบอกว่าข้ามกี่ช่อง) ไม่ทับเรียงความ ไม่ข้ามไปบล็อกอื่น</li>
+      <li><b>ชื่อผลงานในคลังต้องตรงกับหัวข้อในเว็บ</b> ถ้าไปแก้หัวข้อในเว็บเอง ปุ่มแนบรูปจะหาบล็อกไม่เจอ — แก้ในคลังให้ตรง หรือแนบรูปก่อนแก้</li>
+      <li><b>ข้อมูลที่เว็บ Verify แล้ว</b> (ช่อง readonly) ระบบไม่แตะ และไม่แตะรหัสผ่าน/ช่องอัปโหลดไฟล์อื่น</li>
+      <li><b>ไม่มีอะไรออกจากเครื่อง</b> — ไม่มี network call ในโค้ดเลยสักบรรทัด (ตรวจได้ด้วย <code>grep</code>)</li>
+    </ul>
+
+    <h2 id="fix">ถ้าเจอปัญหา</h2>
+    <div class="tablewrap"><table>
+      <tr><th>อาการ</th><th>ทำยังไง</th></tr>
+      <tr><td>กดปุ่มของเว็บไม่ติด</td><td>ย่อแถบคลัง (<kbd>▾</kbd>) ก่อน — ตอนกางมันบังพื้นที่ด้านขวา</td></tr>
+      <tr><td>เติมแล้วขึ้น "ไม่ติด 1 ช่อง"</td><td>กด <kbd>เติมทั้งฟอร์ม</kbd> ซ้ำ — ระบบจะเติมเฉพาะช่องที่ยังว่าง ไม่ทับที่ลงไปแล้ว</td></tr>
+      <tr><td>"ยังไม่มีบล็อกของผลงานนี้บนหน้า"</td><td>เติมข้อความก่อน แล้วเช็คว่าหัวข้อในเว็บตรงกับชื่อในคลังทุกตัวอักษร</td></tr>
+      <tr><td>"หน้าเปลี่ยนไปตั้งแต่วางแผน"</td><td>กด <kbd>เติมทั้งฟอร์ม</kbd> ใหม่ — แผนเก่าทิ้งแล้วเพราะเว็บสร้างบล็อกใหม่</td></tr>
+      <tr><td>ป๊อปอัปขึ้น "อ่านคลังผลงานไม่ได้"</td><td>อย่าเพิ่งพิมพ์ใหม่ — ปิดแล้วเปิดป๊อปอัปอีกที ข้อมูลยังอยู่</td></tr>
+      <tr><td>แก้โค้ดแล้วไม่เปลี่ยน</td><td>กด ↻ ที่การ์ด extension ใน <code>chrome://extensions</code> แล้วรีเฟรชหน้า TCASFolio</td></tr>
+    </table></div>
+
+    <footer>
+      Doodee future · โค้ดและบันทึกการสร้างอยู่ใน <code>docs/superpowers/</code> ของโปรเจกต์ · เทสต์อัตโนมัติ <code>npm test</code> · ทดสอบจริงบน Chromium 151 กับ student.mytcas.com
+    </footer>
+  </main>
+</div>
