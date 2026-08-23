@@ -1,4 +1,4 @@
-// content script อยู่ isolated world — File ที่สร้างจากตรงนั้น React ของเว็บไม่รับ
+// content script อยู่ isolated world - File ที่สร้างจากตรงนั้น React ของเว็บไม่รับ
 // (วัดแล้ว: โค้ดเดียวกัน จาก isolated ไม่ติด จาก main ติด) ไฟล์นี้จึงอยู่ main world
 (function () {
   "use strict";
