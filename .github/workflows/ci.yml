@@ -1,0 +1,49 @@
+# ส่วนขยายนี้ไม่มี build step และไม่มี dependency — โหลดเป็น unpacked ตรง ๆ
+# CI จึงมีหน้าที่แค่: เทสต์ตรรกะใน model.js, กันไฟล์พังทางไวยากรณ์,
+# และกันไฟล์คลังส่วนตัวหลุดขึ้น repo
+name: CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # ไม่มี dependency เลย จึงไม่ต้อง npm ci (และ repo ไม่มี package-lock.json)
+      - name: Unit tests
+        run: node --test test/*.test.js
+
+      - name: Syntax check
+        run: |
+          for f in model.js storage.js content.js popup.js inject.js; do
+            node --check "$f"
+          done
+
+      - name: manifest.json is valid
+        run: |
+          node -e '
+            const m = JSON.parse(require("fs").readFileSync("manifest.json", "utf8"));
+            if (m.manifest_version !== 3) throw new Error("ต้องเป็น MV3");
+            for (const f of m.content_scripts[0].js) require("fs").accessSync(f);
+            console.log("manifest ok:", m.name, m.version);
+          '
+
+      - name: No personal vault export committed
+        run: |
+          if git ls-files | grep -E 'doodee-future-.*\.json'; then
+            echo "::error::มีไฟล์คลังส่วนตัวถูก track อยู่ — เอาออกก่อน"
+            exit 1
+          fi
