@@ -169,6 +169,10 @@
 
 .fill-all:hover { border-color: #63b177; color: #d6f5de; }
 
+.fill-new { background: #2b3550; border-color: #4a6ea8; color: #cfe0ff; font-weight: 600; }
+.fill-new:hover { border-color: #7aa5e8; color: #eaf2ff; }
+.fill-new:disabled { opacity: .6; cursor: default; }
+.note-sub { color: #9aa3b2; font-size: 11px; margin-top: 4px; }
 .fill-img { background: #3a2f4a; border-color: #5d4a7d; color: #d4bfff; }
 .fill-img:hover { border-color: #9a7fd0; color: #ece3ff; }
 .fill-img:disabled { opacity: 0.6; cursor: progress; }

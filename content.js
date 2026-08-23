@@ -849,6 +849,83 @@
   // ขอบเขตบล็อกต้องเป็น .block ชั้นนอก ไม่ใช่ .block__inner
   // closest("[class*=block]") จะชน block__inner ก่อน ซึ่งเป็นแค่ชั้นในของส่วนข้อความ
   // ส่วนรูป (.imgs) อยู่ใน block__inner อีกตัวที่เป็นพี่น้องกัน — หาจากชั้นในจึงไม่เจอ
+  // ── สร้างบล็อกให้เอง ─────────────────────────────────────────────
+  // จุดที่คนสับสนที่สุดคือลำดับ: ต้องกด "＋ เพิ่ม…" ของเว็บ แล้วคลิกเลือกบล็อก
+  // ก่อน ถึงจะเติมได้ ปุ่มนี้ทำสองขั้นนั้นให้ แล้วค่อยโชว์แผนตามเดิม
+  // (ยังต้องกดยืนยันเอง — เขียนลงใบสมัครจริง ห้ามลงมือเงียบ ๆ)
+  const ADD_BUTTON_BY_TYPE = new Map([
+    ["รางวัล / เกียรติบัตร", "เพิ่มรางวัล"],
+    ["โครงงาน / วิจัย", "เพิ่มโครงงาน"],
+    ["กิจกรรม", "เพิ่มกิจกรรม"],
+    ["การอบรม", "เพิ่มการอบรม"],
+    ["ผลงานสร้างสรรค์", "เพิ่มผลงาน"],
+  ]);
+
+  function findAddButton(type) {
+    const want = ADD_BUTTON_BY_TYPE.get(type);
+    if (!want) return null;
+    return [...document.querySelectorAll("button")].find(
+      (b) => !host.contains(b) && isVisible(b) && b.textContent.replace(/\s+/g, " ").trim().endsWith(want),
+    ) || null;
+  }
+
+  function freshEmptyTitle() {
+    return [...document.querySelectorAll("[class*=free__title]")]
+      .find((el) => !host.contains(el) && isVisible(el) && !readField(el).trim()) || null;
+  }
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function createBlockThenPlan(item, btn) {
+    const add = findAddButton(item.type);
+    if (!add) {
+      showNote(
+        ADD_BUTTON_BY_TYPE.has(item.type)
+          ? `ไม่เจอปุ่ม "＋ ${ADD_BUTTON_BY_TYPE.get(item.type)}" บนหน้านี้ — เปิดหน้าแฟ้มก่อน`
+          : `ผลงานนี้ไม่มีหมวด เลยไม่รู้ว่าต้องกดปุ่มไหน — ตั้งหมวดในไอคอนส่วนขยายก่อน`,
+      );
+      return;
+    }
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "กำลังสร้าง…";
+    try {
+      const before = new Set(pageBlocks());
+      add.click();
+      let title = null;
+      for (let i = 0; i < 12 && !title; i += 1) {
+        await wait(400);
+        const found = freshEmptyTitle();
+        if (found && !before.has(outerBlock(found))) title = found;
+      }
+      if (!title) {
+        showNote("กดปุ่มเพิ่มของเว็บแล้วแต่ยังไม่เห็นบล็อกใหม่ — ลองกดอีกที");
+        return;
+      }
+      const block = outerBlock(title);
+      block.scrollIntoView({ block: "center" });
+      await wait(400);
+      (block.querySelector("[class*=cathead]") || block).click(); // เลือกบล็อก ไม่งั้นเว็บไม่ให้เขียน
+      await wait(1600);
+
+      const plan = buildPlan(item);
+      if (!plan.length) {
+        showNote("สร้างบล็อกให้แล้ว แต่ยังไม่เจอช่องที่เติมได้ — ลองคลิกที่บล็อกนั้นแล้วกด เติมทั้งฟอร์ม");
+        return;
+      }
+      showPlan(plan);
+      noteText.append(
+        Object.assign(document.createElement("div"), {
+          className: "note-sub",
+          textContent: "สร้างบล็อกใหม่ให้แล้ว · ถ้ากดยกเลิก บล็อกเปล่าจะค้างอยู่ ลบเองได้ที่ปุ่มถังขยะของเว็บ",
+        }),
+      );
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
   function outerBlock(el) {
     let node = el;
     let best = null;
@@ -1129,6 +1206,14 @@
     ]) {
       if (value) fillRow.append(fillButton(item, what, value));
     }
+
+    const newBtn = document.createElement("button");
+    newBtn.type = "button";
+    newBtn.className = "fill fill-new";
+    newBtn.textContent = "＋ ลงพอร์ต";
+    newBtn.title = "สร้างบล็อกใหม่ในเว็บให้ตรงหมวด แล้วเติมข้อมูลชิ้นนี้";
+    newBtn.addEventListener("click", () => { createBlockThenPlan(item, newBtn); });
+    fillRow.append(newBtn);
 
     const allBtn = document.createElement("button");
     allBtn.type = "button";

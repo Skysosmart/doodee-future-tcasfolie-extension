@@ -361,3 +361,22 @@ Open (image counts): after edit cycles the DOM showed block 1 with 6 frames (one
 from no current vault set) and block 2 with 3; deleting + re-uploading held only until the
 next edit. The site's nodes carry no React fiber, so state is unreadable from the DOM; the
 ground truth is save → reload. Do not "fix" image counts from DOM reads again.
+
+Ruling 21 — "＋ ลงพอร์ต" (2026-08-23). The #1 usability trap, confirmed by the owner using it:
+the panel could only fill a block that already existed and was selected, so the user had to know
+to press the site's own "＋ เพิ่ม…" first and click the block. The card now carries a button that
+does both: maps `item.type` → the site's add button (รางวัล/โครงงาน/กิจกรรม/การอบรม/ผลงาน),
+clicks it, waits for a *new* empty title (compared against the pre-click block set, ≤4.8 s),
+scrolls, selects the block, then runs the existing buildPlan → showPlan path. Confirm is still
+manual — this writes into a live application. Cancel leaves an empty block; the note says so
+rather than auto-deleting (deleting the wrong block is worse than a stray empty one).
+Verified live on the Mahidol folio: 11 → 12 blocks, plan offered 5 fields, cancel + delete
+returned it to 11. All five type→button mappings resolve on the real page. 16/16 tests.
+
+Save-failure post-mortem (same day): TCASFolio PUTs the whole folio, images inlined, to
+`tcas65.as.r.appspot.com`. A 29 MB 6000×4000 photo made the body 38 MB → Google Frontend
+returned **413**, whose error page carries no CORS header, so the browser reported a CORS
+failure and the app showed "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ". Lesson for the extension: resize
+before attaching (not yet implemented) and never trust that error string. Also measured: the
+site's "ลบรูป" deletes the *selected slot*, not the image you clicked — repeated delete+reattach
+cycles silently accumulate images in state, which is what inflated the payload.
