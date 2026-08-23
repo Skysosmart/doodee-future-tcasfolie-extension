@@ -14,6 +14,7 @@
   let items = [];
   let activeType = "";
   let activeTag = "";
+  let query = "";
   // เริ่มที่ย่อไว้เสมอ — panel ลอย fixed ทับปุ่มของใบสมัครจริงได้
   // (วัดแล้ว: elementFromPoint บนปุ่มชิดขอบขวาคืน host ตัวนี้ ไม่ใช่ปุ่ม)
   // ถ้าผู้ใช้เคยกางไว้ ค่าใน storage จะมากางให้เองตอน init
@@ -43,7 +44,10 @@
 
   const heading = document.createElement("span");
   heading.className = "heading";
-  heading.textContent = "คลังผลงาน";
+  heading.textContent = "Doodee";
+
+  const count = document.createElement("span");
+  count.className = "count";
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -103,7 +107,7 @@
     helpBtn.setAttribute("aria-expanded", String(!help.hidden));
   });
 
-  header.append(heading, helpBtn, toggle);
+  header.append(heading, count, helpBtn, toggle);
 
   const body = document.createElement("div");
   body.className = "body";
@@ -169,30 +173,55 @@
     note.hidden = true;
   }
 
-  const typeSelect = document.createElement("select");
-  typeSelect.className = "type-filter";
-  const anyType = document.createElement("option");
-  anyType.value = "";
-  anyType.textContent = "ทุกประเภท";
-  typeSelect.appendChild(anyType);
-  for (const type of Model.TYPES) {
-    const option = document.createElement("option");
-    option.value = type;
-    option.textContent = type;
-    typeSelect.appendChild(option);
-  }
-  typeSelect.addEventListener("change", () => {
-    activeType = typeSelect.value;
+  const search = document.createElement("input");
+  search.className = "search";
+  search.type = "search";
+  search.placeholder = "ค้นหาผลงาน…";
+  search.addEventListener("input", () => {
+    query = search.value;
     renderList();
   });
 
+  const tagToggle = document.createElement("button");
+  tagToggle.type = "button";
+  tagToggle.className = "tagtoggle";
+  tagToggle.textContent = "แท็ก ▾";
+  tagToggle.addEventListener("click", () => {
+    tagBar.hidden = !tagBar.hidden;
+    tagToggle.textContent = tagBar.hidden ? "แท็ก ▾" : "แท็ก ▴";
+  });
+
+  const typeBar = document.createElement("div");
+  typeBar.className = "typebar";
+
+  function renderTypeBar() {
+    typeBar.replaceChildren(
+      ...["", ...Model.TYPES].map((type) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "chip" + (activeType === type ? " is-active" : "");
+        chip.setAttribute("aria-pressed", String(activeType === type));
+        chip.textContent = type ? type.split(" / ")[0] : "ทั้งหมด";
+        chip.title = type || "ทุกหมวด";
+        chip.addEventListener("click", () => {
+          activeType = type;
+          renderTypeBar();
+          renderList();
+        });
+        return chip;
+      }),
+      tagToggle,
+    );
+  }
+
   const tagBar = document.createElement("div");
   tagBar.className = "tagbar";
+  tagBar.hidden = true;
 
   const list = document.createElement("div");
   list.className = "list";
 
-  body.append(typeSelect, tagBar, list);
+  body.append(search, typeBar, tagBar, list);
   root.append(header, help, note, body);
   shadow.append(sheet, root);
 
@@ -209,7 +238,8 @@
 
   function renderTagBar() {
     const tags = Model.allTags(items);
-    tagBar.hidden = tags.length === 0;
+    tagToggle.hidden = tags.length === 0;
+    if (!tags.length) tagBar.hidden = true;
     tagBar.replaceChildren(
       ...["", ...tags].map((tag) => {
         const chip = document.createElement("button");
@@ -1236,8 +1266,21 @@
 
     const meta = document.createElement("div");
     meta.className = "item-meta";
-    const extras = [item.level, item.result].filter(Boolean).join(" · ");
-    meta.textContent = [item.type, item.org, extras].filter(Boolean).join(" · ");
+    const imgCount = imageCounts[item.id] || 0;
+    const pills = [
+      [item.type ? item.type.split(" / ")[0] : "", ""],
+      [item.level, "is-level"],
+      [item.result, ""],
+      [imgCount ? `🖼 ${imgCount} รูป` : "", "is-img"],
+    ];
+    for (const [text, extra] of pills) {
+      if (!text) continue;
+      const pill = document.createElement("span");
+      pill.className = "tag" + (extra ? " " + extra : "");
+      pill.textContent = text;
+      meta.append(pill);
+    }
+    if (item.org) meta.title = item.org;
 
     const copyBtn = document.createElement("button");
     copyBtn.type = "button";
@@ -1265,16 +1308,21 @@
 
     const fillRow = document.createElement("div");
     fillRow.className = "fillrow";
+
+    // ปุ่มย่อยพับไว้ก่อน — บนการ์ดเหลือแค่สองปุ่มที่ใช้จริงทุกครั้ง
+    const moreRow = document.createElement("div");
+    moreRow.className = "fillrow more";
+    moreRow.hidden = true;
     const fillLabel = document.createElement("span");
     fillLabel.className = "fill-label";
     fillLabel.textContent = "เติมลงช่องที่เลือก:";
-    fillRow.append(fillLabel);
+    moreRow.append(fillLabel);
     for (const [what, value] of [
       ["ชื่อ", item.title],
       ["หน่วยงาน", item.org],
       ["รายละเอียด", item.detail],
     ]) {
-      if (value) fillRow.append(fillButton(item, what, value));
+      if (value) moreRow.append(fillButton(item, what, value));
     }
 
     const newBtn = document.createElement("button");
@@ -1289,6 +1337,7 @@
     allBtn.type = "button";
     allBtn.className = "fill fill-all";
     allBtn.textContent = "เติมทั้งฟอร์ม";
+    allBtn.title = "ใช้กับบล็อกที่มีอยู่แล้วและเลือกไว้";
     allBtn.addEventListener("click", () => {
       const plan = buildPlan(item);
       if (!plan.length) {
@@ -1297,7 +1346,7 @@
       }
       showPlan(plan); // ยังไม่เขียนอะไรทั้งนั้น รอกดยืนยันก่อน
     });
-    fillRow.append(allBtn);
+    moreRow.append(allBtn);
 
     const n = imageCounts[item.id] || 0;
     if (n) {
@@ -1309,19 +1358,34 @@
       fillRow.append(imgBtn);
     }
 
-    box.append(title, meta, fillRow, copyBtn);
+    const moreBtn = document.createElement("button");
+    moreBtn.type = "button";
+    moreBtn.className = "morebtn";
+    moreBtn.textContent = "⋯";
+    moreBtn.title = "ปุ่มเพิ่มเติม";
+    moreBtn.setAttribute("aria-expanded", "false");
+    moreBtn.addEventListener("click", () => {
+      moreRow.hidden = !moreRow.hidden;
+      copyBtn.hidden = moreRow.hidden;
+      moreBtn.setAttribute("aria-expanded", String(!moreRow.hidden));
+    });
+    fillRow.append(moreBtn);
+
+    copyBtn.hidden = true;
+    box.append(title, meta, fillRow, moreRow, copyBtn);
     return box;
   }
 
   function renderList() {
-    const shown = Model.filterItems(items, { type: activeType, tag: activeTag });
-    heading.textContent = `คลังผลงาน (${shown.length}/${items.length})`;
+    const shown = Model.filterItems(items, { type: activeType, tag: activeTag, q: query });
+    count.textContent =
+      shown.length === items.length ? `${items.length} ผลงาน` : `${shown.length}/${items.length} ผลงาน`;
 
     if (!shown.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
       empty.textContent = items.length
-        ? "ไม่มีรายการที่ตรงตัวกรอง"
+        ? "ไม่เจอผลงานที่ตรงกับที่ค้นหา"
         : "ยังไม่มีข้อมูล — เพิ่มได้จากไอคอนส่วนขยาย";
       list.replaceChildren(empty);
       return;
@@ -1343,6 +1407,7 @@
     items = next;
     // แท็กที่เลือกไว้อาจถูกลบไปแล้วจากอีกหน้าต่างหนึ่ง — ถ้าไม่มีแล้วให้เลิกกรอง
     if (activeTag && !Model.allTags(items).includes(activeTag)) activeTag = "";
+    renderTypeBar();
     renderTagBar();
     renderList();
   }

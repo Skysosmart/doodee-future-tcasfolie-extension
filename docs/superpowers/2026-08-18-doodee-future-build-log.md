@@ -396,3 +396,20 @@ Measured on the two photos that actually caused trouble: `IMG_7101.JPG` 6000×40
 413 threshold. Integration on a live folio is **not yet exercised** — the TCASFolio session
 needs a ThaID re-login after each browser restart, and reloading the unpacked extension
 requires restarting Chromium. Test it on the next real block.
+
+Ruling 23 — panel restyled to blend into TCASFolio (2026-08-24). The dark card floated on the
+site's pale-blue page and read as a foreign object; the owner asked for something that looks
+like part of the system. Tokens are measured from the live page, not guessed: body `#E9F4FF`,
+ink `#191E23`, deep blue `#1A477F`, and the site's own webfonts `tt` (body) / `kvl` (headings)
+— `@font-face` is document-scoped, so the shadow root can name them directly, with a Thai
+fallback stack in case the site renames them. Layout changes that came out of watching the
+panel get used: a search box (the vault is 56 entries and there was no way to find one),
+category pills replacing a 30-plus tag row (tags moved behind a `แท็ก ▾` disclosure), meta
+rendered as the site's own pill shapes, and the card reduced to the two buttons used every
+time — `＋ ลงพอร์ต` and `แนบรูป (N)` — with the per-field buttons, `เติมทั้งฟอร์ม` and copy
+folded into `⋯`. `filterItems` grew a `q` criterion (all words must match across title, org,
+result, detail, tags); 17 tests. Fill and attach engines untouched.
+
+Verified on the live site: 56 cards render, "camp" narrows to 8, `⋯` reveals the four
+secondary buttons, panel width 360 and `elementFromPoint` at the page centre still returns the
+page (the C1 overlay check), title font resolves to `kvl`.

@@ -198,3 +198,17 @@ test("ฟิลด์ใหม่ ระดับ/ผลรางวัล/ช�
   assert.equal(changed, true, "ต้องบอกให้ storage เขียนกลับ");
   assert.equal(M.normalize(items).changed, false, "ครั้งที่สองต้องนิ่งแล้ว");
 });
+
+test("filterItems matches every search word across title, org, detail and tags", () => {
+  const items = Model.normalize([
+    { title: "MakeX Challenger", org: "MakeX Thailand", detail: "หุ่นยนต์", tags: ["หุ่นยนต์"], type: "รางวัล / เกียรติบัตร" },
+    { title: "ค่าย Click Camp", org: "ม.มหิดล", detail: "cyber security กับ website", tags: ["CTF"], type: "การอบรม" },
+  ]).items;
+
+  assert.equal(Model.filterItems(items, { q: "makex" }).length, 1);
+  assert.equal(Model.filterItems(items, { q: "MAKEX thailand" }).length, 1, "ไม่สนตัวพิมพ์ใหญ่เล็ก และทุกคำต้องเจอ");
+  assert.equal(Model.filterItems(items, { q: "makex มหิดล" }).length, 0, "คำที่อยู่คนละชิ้นต้องไม่ match");
+  assert.equal(Model.filterItems(items, { q: "ctf" }).length, 1, "ค้นจากแท็กได้");
+  assert.equal(Model.filterItems(items, { q: "  " }).length, 2, "ช่องว่างล้วนคือไม่กรอง");
+  assert.equal(Model.filterItems(items, { q: "security", type: "รางวัล / เกียรติบัตร" }).length, 0, "ต้องทำงานร่วมกับตัวกรองหมวด");
+});

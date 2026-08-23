@@ -105,10 +105,21 @@
   function filterItems(items, criteria) {
     const type = (criteria && criteria.type) || "";
     const tag = (criteria && criteria.tag) || "";
-    return items.filter(
-      (entry) =>
-        (!type || entry.type === type) && (!tag || entry.tags.includes(tag)),
-    );
+    // ค้นหาแบบ "ทุกคำต้องเจอ" ในหัวข้อ/หน่วยงาน/ผลรางวัล/รายละเอียด/แท็ก
+    // คลังจริงมี 50+ ชิ้น การไล่หาด้วยตาคือจุดที่ช้าที่สุดตอนกรอก
+    const words = String((criteria && criteria.q) || "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    return items.filter((entry) => {
+      if (type && entry.type !== type) return false;
+      if (tag && !entry.tags.includes(tag)) return false;
+      if (!words.length) return true;
+      const hay = [entry.title, entry.org, entry.result, entry.detail, entry.tags.join(" ")]
+        .join(" ")
+        .toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
   }
 
   function allTags(items) {

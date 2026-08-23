@@ -1,235 +1,463 @@
+/* โทนเดียวกับ TCASFolio — สีกับฟอนต์วัดจากหน้าเว็บจริง (2026-08-23):
+   พื้น #E9F4FF · ตัวหนังสือ #191E23 · น้ำเงิน #1A477F · ฟอนต์ tt (เนื้อ) / kvl (หัวข้อ)
+   @font-face เป็นของทั้งเอกสาร shadow root จึงเรียกฟอนต์ของเว็บมาใช้ได้ตรง ๆ
+   มี fallback ไว้เผื่อเว็บเปลี่ยนชื่อฟอนต์ ห้ามพังเงียบ ๆ */
 :host {
+  --ink: #16324f;
+  --ink-soft: #5c728a;
+  --ink-faint: #93a2b4;
+  --blue: #1a477f;
+  --blue-soft: #f2f7fd;
+  --line: #e4edf8;
+  --line-soft: #f0f5fb;
+  --surface: #ffffff;
+  --surface-soft: #f8fbff;
+  --pink: #c0446a;
+  --pink-soft: #fef5f8;
+  --pink-line: #f3c9d5;
+  --sky: #1a6fb8;
+  --sky-soft: #f3f9ff;
+  --sky-line: #cfe3f8;
+  --font: tt, "Noto Sans Thai", "IBM Plex Sans Thai", sans-serif;
+  --font-head: kvl, tt, "Noto Sans Thai", sans-serif;
+
   all: initial;
-  /* กฎธรรมดาของหน้าเว็บชนะกฎธรรมดาใน :host เสมอ — เป็นเรื่องของลำดับ cascade
-     ไม่ใช่ specificity ดังนั้น all:initial กันไม่อยู่ ทดสอบแล้วด้วยกฎธรรมดา
-     `div { margin: 12px }` ของหน้าเว็บ ซึ่งดัน panel เลื่อนไปทั้งอัน
-     สิ่งที่ขาดไม่ได้จริง ๆ จึงต้อง !important */
-  display: block !important;
   position: fixed !important;
-  top: 88px !important;
-  right: 0 !important;
-  bottom: auto !important;
-  left: auto !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  z-index: 2147483647 !important;
+  top: 84px !important;
+  right: 16px !important;
+  z-index: 2147483000 !important;
+  font-family: var(--font) !important;
+  color: var(--ink) !important;
 }
 
-/* ตอนย่อ ปุ่มเล็ก ๆ นี้ยังกินพื้นที่คลิกอยู่ดี (วัดแล้ว ~46x42)
-   ย้ายลงมากลางขอบขวา ให้พ้นมุมบนขวาซึ่งเป็นที่ของเมนูบัญชี/ปุ่มออกจากระบบ */
+/* ตอนย่อ ย้ายมานั่งกลางขอบขวา ห่างจากเมนูบัญชีของเว็บที่อยู่มุมบนขวา */
 :host(.is-collapsed) {
   top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
-/* [hidden] ของเบราว์เซอร์เป็น display:none แบบ UA origin ซึ่งแพ้ display:flex
-   ที่เราเขียนเอง — .hidden = true จึงไม่ทำอะไรเลยถ้าไม่ประกาศทับตรงนี้ */
+.panel {
+  width: 360px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(20, 55, 100, 0.16);
+  overflow: hidden;
+}
+
+.panel.is-collapsed {
+  width: auto;
+  border-radius: 12px;
+}
+
 [hidden] {
   display: none !important;
 }
 
-/* ตัวอักษรตั้งที่ .panel ไม่ใช่ :host — css ของหน้าเว็บเอื้อมถึง host ได้
-   แต่เอื้อมเข้ามาใน shadow tree ไม่ได้ ตั้งตรงนี้จึงกันการรั่วเข้าได้จริง */
-.panel {
-  font-family: "Mali", "Noto Sans Thai", system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #e9eaee;
-  display: flex;
-  flex-direction: column;
-  width: 300px;
-  max-height: 70vh;
-  background: #14161a;
-  border: 1px solid #2b2f38;
-  border-right: none;
-  border-radius: 8px 0 0 8px;
-  box-shadow: -4px 0 18px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-}
-
-.panel.is-collapsed { width: auto; }
-.panel.is-collapsed .heading { display: none; }
-
+/* ---------- หัวแผง ---------- */
 .header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
-  background: #1d2027;
-  border-bottom: 1px solid #2b2f38;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
 }
 
-.heading { flex: 1; font-size: 12px; color: #878d9b; white-space: nowrap; }
+.panel.is-collapsed .header {
+  border-bottom: 0;
+  padding: 8px;
+}
+
+.heading {
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--blue);
+  white-space: nowrap;
+}
+
+.count {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.panel.is-collapsed .heading,
+.panel.is-collapsed .count {
+  display: none;
+}
 
 .toggle {
-  padding: 4px 8px;
-  background: transparent;
-  border: 1px solid #2b2f38;
-  border-radius: 4px;
-  color: #e9eaee;
-  font: inherit;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-family: var(--font);
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
 
-/* overscroll-behavior: เลื่อนสุดรายการแล้วต้องไม่ไปเลื่อนใบสมัครที่อยู่ข้างหลัง */
-.toggle.help { margin-right: 4px; font-weight: 600; }
-
-.help-card { margin: 0 10px 8px; padding: 9px 11px; background: #1d2027; border: 1px solid #2b2f38; border-radius: 6px; font-size: 12px; }
-.help-head { font-weight: 600; margin-bottom: 6px; color: #c6d9ff; }
-.help-card ol { margin: 0; padding-left: 18px; }
-.help-card li { margin: 4px 0; line-height: 1.45; }
-.help-card li b { display: block; font-weight: 600; }
-.help-card li small { color: #878d9b; font-size: 11px; }
-.help-foot { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #2b2f38; color: #878d9b; font-size: 11px; }
-
-.body { padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
-
-.note {
-  margin: 0 10px 10px;
-  padding: 7px 9px;
-  background: #2a1d1d;
-  border: 1px solid #6b3535;
-  border-radius: 5px;
-  color: #f0b8b8;
-  font-size: 12px;
+.toggle:hover {
+  background: #e5f0fb;
 }
 
-.type-filter {
-  width: 100%;
-  padding: 6px 8px;
-  background: #1d2027;
-  border: 1px solid #2b2f38;
-  border-radius: 5px;
-  color: #e9eaee;
-  font: inherit;
+.toggle.help {
+  margin-left: auto;
 }
 
-.tagbar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.panel.is-collapsed .toggle.help {
+  margin-left: 0;
+}
+
+/* ---------- ค้นหา + ตัวกรอง ---------- */
+.search {
+  display: block;
+  width: calc(100% - 28px);
+  margin: 12px 14px 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #dce7f5;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.search::placeholder {
+  color: var(--ink-faint);
+}
+
+.search:focus {
+  outline: 2px solid rgba(26, 71, 127, 0.35);
+  outline-offset: 1px;
+}
+
+.typebar,
+.tagbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 10px;
+}
+
+.tagbar {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
 
 .chip {
-  padding: 2px 9px;
-  background: transparent;
-  border: 1px solid #2b2f38;
+  border: 1px solid transparent;
   border-radius: 999px;
-  color: #878d9b;
-  font: inherit;
-  font-size: 11px;
+  padding: 5px 12px;
+  background: var(--blue-soft);
+  color: #47607d;
+  font-family: var(--font);
+  font-size: 12px;
   cursor: pointer;
 }
 
-.chip.is-active { border-color: #5b8cff; color: #5b8cff; }
-
-.list { margin-top: 10px; }
-
-.item {
-  padding: 9px;
-  margin-bottom: 7px;
-  background: #1d2027;
-  border: 1px solid #2b2f38;
-  border-radius: 6px;
+.chip:hover {
+  background: #e5f0fb;
 }
 
-.item-title { font-weight: 600; word-break: break-word; }
-.item-meta { margin: 2px 0 7px; color: #878d9b; font-size: 11px; }
+.chip.is-active {
+  background: var(--blue);
+  color: #fff;
+}
 
-.fillrow {
+.tagtoggle {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: #fff;
+  color: var(--ink-soft);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---------- รายการผลงาน ---------- */
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.list {
+  /* ให้ลิสต์เป็นตัวเลื่อน ไม่ใช่ทั้งแผง — หัวแผงกับช่องค้นหาต้องอยู่กับที่เสมอ
+     ใช้ max-height แทนการพึ่ง flex: 1 เพราะ .panel สูงตามเนื้อหา ไม่ได้สูงคงที่ */
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 56vh;
+  overflow: auto;
+  border-top: 1px solid var(--line-soft);
+}
+
+.item {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.item-title {
+  font-family: var(--font-head);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.item-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
-.fill-label { color: #878d9b; font-size: 11px; }
+.tag {
+  border: 1px solid #dde8f5;
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: #fff;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.tag.is-level {
+  border-color: var(--pink-line);
+  background: var(--pink-soft);
+  color: var(--pink);
+}
+
+.tag.is-img {
+  border-color: var(--sky-line);
+  background: var(--sky-soft);
+  color: var(--sky);
+}
+
+/* ---------- ปุ่มในการ์ด ---------- */
+.fillrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.fillrow.more {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
 
 .fill {
-  padding: 3px 8px;
-  background: #223049;
-  border: 1px solid #35507d;
-  border-radius: 4px;
-  color: #9dbcff;
-  font: inherit;
-  font-size: 11px;
+  border: 1px solid #dce7f5;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: #fff;
+  color: var(--blue);
+  font-family: var(--font);
+  font-size: 13px;
   cursor: pointer;
 }
 
-.fill:hover { border-color: #5b8cff; color: #c6d9ff; }
-
-.note.is-ok {
-  background: #1b2a1e;
-  border-color: #35603f;
-  color: #b8e6c4;
+.fill:hover {
+  border-color: #b9d2ee;
+  background: var(--surface-soft);
 }
 
-.fill-all {
-  background: #2b4a2f;
-  border-color: #3f7048;
-  color: #b8e6c4;
+.fill:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
-.fill-all:hover { border-color: #63b177; color: #d6f5de; }
-
-.fill-new { background: #2b3550; border-color: #4a6ea8; color: #cfe0ff; font-weight: 600; }
-.fill-new:hover { border-color: #7aa5e8; color: #eaf2ff; }
-.fill-new:disabled { opacity: .6; cursor: default; }
-.note-sub { color: #9aa3b2; font-size: 11px; margin-top: 4px; }
-.fill-img { background: #3a2f4a; border-color: #5d4a7d; color: #d4bfff; }
-.fill-img:hover { border-color: #9a7fd0; color: #ece3ff; }
-.fill-img:disabled { opacity: 0.6; cursor: progress; }
-
-.note-actions { margin-top: 7px; display: flex; gap: 6px; }
-
-.plan-head { margin-bottom: 5px; font-weight: 600; }
-
-.plan-row { display: block; margin: 2px 0; font-size: 11px; }
-
-.plan-kind {
-  display: inline-block;
-  min-width: 62px;
-  padding: 1px 6px;
-  background: #223049;
-  border: 1px solid #35507d;
-  border-radius: 4px;
-  color: #9dbcff;
+.fill-new {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+  font-family: var(--font-head);
+  font-weight: 600;
 }
 
-.plan-warn { color: #f0b8b8; }
+.fill-new:hover {
+  background: #163c6c;
+  border-color: #163c6c;
+}
 
-.plan-note { color: #878d9b; }
+.fillrow.more .fill {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
 
-.confirm {
-  padding: 3px 10px;
-  background: #2b4a2f;
-  border: 1px solid #63b177;
-  border-radius: 4px;
-  color: #d6f5de;
-  font: inherit;
+.fill-label {
   font-size: 11px;
-  cursor: pointer;
+  color: var(--ink-faint);
+  align-self: center;
 }
 
-.undo,
-.cancel {
-  padding: 3px 10px;
-  background: transparent;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: inherit;
-  font: inherit;
-  font-size: 11px;
+.morebtn {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 16px;
+  letter-spacing: 2px;
+  padding: 4px 2px;
   cursor: pointer;
+  line-height: 1;
+}
+
+.morebtn:hover {
+  color: var(--blue);
 }
 
 .copy {
-  width: 100%;
-  padding: 5px;
-  background: transparent;
-  border: 1px solid #2b2f38;
-  border-radius: 5px;
-  color: #e9eaee;
-  font: inherit;
+  border: 1px solid #dce7f5;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: #fff;
+  color: var(--ink-soft);
+  font-family: var(--font);
   font-size: 12px;
   cursor: pointer;
 }
 
-.empty { padding: 14px 0; color: #878d9b; font-size: 12px; text-align: center; }
+.empty {
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+/* ---------- แถบสถานะ / แผนการเติม ---------- */
+.note {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fffdf5;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #6b5a2e;
+}
+
+.note.is-ok {
+  background: #f2fbf5;
+  color: #256b3c;
+}
+
+.note-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.note-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.confirm,
+.cancel,
+.undo {
+  border-radius: 9px;
+  padding: 7px 13px;
+  font-family: var(--font-head);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.confirm {
+  background: var(--blue);
+  color: #fff;
+}
+
+.confirm:hover {
+  background: #163c6c;
+}
+
+.cancel,
+.undo {
+  background: #fff;
+  border-color: #dce7f5;
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.plan-head {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.plan-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.plan-kind {
+  color: var(--blue);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.plan-note {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.plan-warn {
+  color: #b3541e;
+}
+
+/* ---------- การ์ดวิธีใช้ ---------- */
+.help-card {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-soft);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.help-head {
+  font-family: var(--font-head);
+  font-weight: 600;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+
+.help-card ol {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 7px;
+}
+
+.help-card li b {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.help-card li small {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.help-foot {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
