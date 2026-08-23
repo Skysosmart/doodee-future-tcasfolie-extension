@@ -426,6 +426,13 @@
     // ไม่มีกล่องไหนปลอดภัยเลย (ทุกกล่องคร่อมหลายชิ้น) → ไม่เติมอะไร ดีกว่าเดา
     if (!chosenContainer) pool = [];
 
+    // ชนิดช่องที่ "มีอยู่" ในกล่องที่เลือก — นับทั้งที่ว่างและที่มีข้อความแล้ว
+    // วัดจริงบน TCASFolio: ช่องหน่วยงานในแผงแก้ไขถูกกรอกไปแล้ว จึงไม่อยู่ใน pool
+    // แต่มันก็ยังเป็นช่องหน่วยงานอยู่ดี — ถ้านับแค่ที่เรากำลังเขียน จะพ่วงหน่วยงานซ้ำลงรายละเอียด
+    const presentKinds = new Set(
+      chosenContainer ? all.filter((el) => chosenContainer.contains(el)).map(guessKind).filter(Boolean) : [],
+    );
+
     const used = new Set();
     const plan = [];
     for (const el of pool) {
@@ -456,8 +463,10 @@
         : ((chosenContainer && allTitles.find((t) => chosenContainer.contains(t))) ? readField(allTitles.find((t) => chosenContainer.contains(t))).trim() : "");
     }
     const detailStep = plan.find((s) => s.kind === "detail");
-    if (detailStep && item.org && !used.has("org")) {
-      detailStep.value = `${item.org}\n\n${item.detail}`;
+    // บรรทัดเดียวคั่น — TCASFolio วาดทุก \n เป็นย่อหน้าเปล่า \n\n จึงกลายเป็นช่องว่างหลายบรรทัด
+    if (detailStep && item.org && !presentKinds.has("org")) {
+      detailStep.body = item.detail;
+      detailStep.value = `${item.org}\n${item.detail}`;
       detailStep.note = "พ่วงหน่วยงาน/ปีไว้บรรทัดแรก";
     }
     plan.skipped = skipped;
@@ -634,7 +643,12 @@
         if (again) { landed = readField(again); el = again; }
       }
 
-      if (landed.trim() === step.value.trim() || (landed.trim() && landed.includes(step.value.slice(0, 20)))) {
+      // ถ้าพ่วงหน่วยงานไว้บรรทัดแรก ให้ยอมรับเมื่อ "เนื้อหา" ติด แม้เว็บจะตัดบรรทัดแรกทิ้ง
+      const body = step.body || step.value;
+      if (
+        landed.trim() === step.value.trim() ||
+        (landed.trim() && (landed.includes(step.value.slice(0, 20)) || landed.includes(body.slice(0, 20))))
+      ) {
         done.push({ el, previous: step.previous });
       } else {
         failed.push(step.label);
@@ -715,7 +729,12 @@
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-      document.execCommand("insertText", false, value);
+      // ขึ้นย่อหน้าด้วย Enter (insertParagraph) แทนการยัด \n ใน insertText —
+      // เว็บจัดการ Enter เองตามธรรมชาติ ส่วน \n ดิบ ๆ เคยทำให้ย่อหน้าหายไปทั้งบล็อกหนึ่งครั้ง
+      String(value).split("\n").forEach((part, i) => {
+        if (i > 0) document.execCommand("insertParagraph", false, null);
+        if (part) document.execCommand("insertText", false, part);
+      });
       return;
     }
     const proto =

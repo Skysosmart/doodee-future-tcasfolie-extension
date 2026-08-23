@@ -344,3 +344,20 @@ each contenteditable write. Measured: 2/2 fields land; no collateral.
 Deferred (Ruling 19): I5 "first slot.click may open the real file dialog within the 5 s
 activation window" — unverified, and if it happens the dialog is simply cancelled; M-list
 items (cached rejected `ensureInjected`, `postMessage("*")`, first image-input-wins) noted.
+
+Ruling 20 — "พ่วงหน่วยงานไว้บรรทัดแรก" misfired on the live folio (2026-08-23). The rule
+prepended `org + "\n\n"` whenever `org` was not among the fields *being written*; on
+TCASFolio's edit panel the org field exists but was already filled, so it was not in the
+pool → every re-fill of a detail got a header line glued on, and TCASFolio draws each `\n`
+as an empty paragraph → 4–5 blank lines per block (11/10 pages). Fixed: the test is now
+"does an org field exist in the chosen scope at all" (`presentKinds`, filled or not), the
+separator is a single `\n`, verification accepts the body landing even if the site drops the
+header, and contenteditable writes type paragraphs with Enter (`insertParagraph`) instead of
+raw `\n` in one `insertText` (one block lost its paragraph breaks that way). Page was repaired
+by hand; the engine change is **not yet exercised live** — the running extension cannot be
+reloaded without restarting Chromium, which would discard the unsaved folio.
+
+Open (image counts): after edit cycles the DOM showed block 1 with 6 frames (one old cert
+from no current vault set) and block 2 with 3; deleting + re-uploading held only until the
+next edit. The site's nodes carry no React fiber, so state is unreadable from the DOM; the
+ground truth is save → reload. Do not "fix" image counts from DOM reads again.
