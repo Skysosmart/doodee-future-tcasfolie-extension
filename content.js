@@ -1008,6 +1008,81 @@
 
   let attachBusy = false; // เว็บมี input รูปตัวเดียวใช้ร่วมกัน สองลูปพร้อมกัน = รูปไขว้บล็อก
 
+  // ── ย่อรูปก่อนอัป ─────────────────────────────────────────────────
+  // วัดจริง 2026-08-23: TCASFolio ส่งทั้งแฟ้มพร้อมรูปเป็นก้อนเดียวตอนกดบันทึก
+  // รูป 6000×4000 ใบเดียว (29 MB) ทำให้ body 38 MB → เซิร์ฟเวอร์ตอบ 413
+  // และหน้า error ไม่มี CORS header เว็บเลยบอกผิดเป็น "เชื่อมต่อไม่สำเร็จ"
+  // ย่อตั้งแต่ตอนแนบ ปัญหานี้จะไม่เกิดอีก (ในคลังยังเก็บไฟล์เต็มไว้เหมือนเดิม)
+  const UPLOAD_MAX_BYTES = 1_200_000;
+  const UPLOAD_MAX_EDGE = 1800;
+
+  function dataUrlBytes(dataUrl) {
+    const base64 = String(dataUrl).slice(String(dataUrl).indexOf(",") + 1);
+    return Math.round(base64.length * 0.75);
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("อ่านไฟล์ที่ย่อแล้วไม่ได้"));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // คืน { image, shrunk } — ถ้าย่อไม่สำเร็จก็ส่งของเดิมไป ดีกว่าไม่ได้แนบเลย
+  async function shrinkForUpload(img) {
+    const bytes = dataUrlBytes(img.data);
+    let bitmap = null;
+    try {
+      const blob = await (await fetch(img.data)).blob();
+      bitmap = await createImageBitmap(blob);
+      const edge = Math.max(bitmap.width, bitmap.height);
+      if (bytes <= UPLOAD_MAX_BYTES && edge <= UPLOAD_MAX_EDGE) return { image: img, shrunk: false };
+
+      let scale = Math.min(1, UPLOAD_MAX_EDGE / edge);
+      let quality = 0.85;
+      let out = null;
+      for (let round = 0; round < 6; round += 1) {
+        const w = Math.max(1, Math.round(bitmap.width * scale));
+        const h = Math.max(1, Math.round(bitmap.height * scale));
+        const canvas = new OffscreenCanvas(w, h);
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+        out = await canvas.convertToBlob({ type: "image/jpeg", quality });
+        if (out.size <= UPLOAD_MAX_BYTES) break;
+        if (quality > 0.6) quality -= 0.12;
+        else scale *= 0.8;
+      }
+      if (!out || out.size >= bytes) return { image: img, shrunk: false };
+      return {
+        image: {
+          name: String(img.name || "image").replace(/\.(png|webp|heic|heif)$/i, ".jpg"),
+          type: "image/jpeg",
+          data: await blobToDataUrl(out),
+        },
+        shrunk: true,
+      };
+    } catch (error) {
+      return { image: img, shrunk: false };
+    } finally {
+      if (bitmap) bitmap.close();
+    }
+  }
+
+  // เลือกเลย์เอาต์ให้พอดีจำนวนรูป จะได้ไม่ต้องไปกดดรอปดาวน์ของเว็บเอง
+  async function setLayoutForCount(count) {
+    const want = count <= 1 ? "เต็มกว้าง 4:3" : `${Math.min(count, 6)} รูป`;
+    const select = [...document.querySelectorAll("select")].find(
+      (el) => !host.contains(el) && isVisible(el) && [...el.options].some((o) => /A4|รูป/.test(o.textContent)),
+    );
+    if (!select) return false;
+    if ((select.selectedOptions[0] || {}).textContent?.trim() === want) return true;
+    if (![...select.options].some((o) => o.textContent.trim() === want)) return false;
+    writeField(select, want); // writeField จับคู่ option ด้วยข้อความ ไม่มีตัวตรงก็ไม่แตะ
+    await sleep(1100);
+    return true;
+  }
+
   async function attachImages(item, button) {
     if (attachBusy) {
       showNote("กำลังแนบรูปของอีกชิ้นอยู่ รอให้เสร็จก่อน");
@@ -1065,6 +1140,7 @@
 
     button.disabled = true;
     let done = 0;
+    let shrunkCount = 0;
     let slotsFull = false;
     let titleShown = "";
     try {
@@ -1082,6 +1158,9 @@
         backBtn.click();
         await sleep(900);
       }
+
+      // ตั้งเลย์เอาต์ให้พอดีจำนวนรูปก่อน ไม่ต้องให้คนไปกดดรอปดาวน์เอง
+      if (await selectBlock()) await setLayoutForCount(images.length);
 
       for (const img of images) {
         button.textContent = `แนบรูป ${done + 1}/${images.length}…`;
@@ -1119,7 +1198,9 @@
         slot.click();
         await sleep(400);
 
-        const handed = await handToPage(img);
+        const ready = await shrinkForUpload(img);
+        if (ready.shrunk) shrunkCount += 1;
+        const handed = await handToPage(ready.image);
         if (!handed.ok) {
           showNote(`ส่งรูปให้หน้าเว็บไม่ได้: ${handed.why}`);
           break;
@@ -1144,7 +1225,10 @@
     }
 
     if (done === images.length) {
-      showFilled(`แนบรูปแล้ว ${done} ใบ ลงบล็อก «${titleShown}»`);
+      showFilled(
+        `แนบรูปแล้ว ${done} ใบ ลงบล็อก «${titleShown}»` +
+          (shrunkCount ? ` · ย่อให้ ${shrunkCount} ใบ กันบันทึกไม่ผ่าน` : ""),
+      );
       undoBtn.hidden = true; // รูปอัปโหลดขึ้นเซิร์ฟเวอร์แล้ว ย้อนด้วยปุ่มลบรูปของเว็บเอง
     } else if (slotsFull) {
       showNote(

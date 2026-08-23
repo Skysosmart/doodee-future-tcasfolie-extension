@@ -380,3 +380,19 @@ failure and the app showed "เชื่อมต่อเซิร์ฟเว�
 before attaching (not yet implemented) and never trust that error string. Also measured: the
 site's "ลบรูป" deletes the *selected slot*, not the image you clicked — repeated delete+reattach
 cycles silently accumulate images in state, which is what inflated the payload.
+
+Ruling 22 — attach now resizes and picks the layout (2026-08-23), so a folio can be built
+without touching the site's own controls at all. `shrinkForUpload()` runs before every
+hand-off: it decodes the vault copy, and if the file exceeds 1.2 MB or 1800 px on the long
+edge it redraws through `OffscreenCanvas` → JPEG q0.85, stepping quality down to 0.6 then
+scale by 0.8 until it fits (≤6 rounds), falling back to the original on any failure. The vault
+keeps the full-resolution file; only the upload is shrunk. `setLayoutForCount()` then sets the
+block's layout select ("เต็มกว้าง 4:3" for one image, otherwise "N รูป", capped at 6) via the
+existing `writeField` SELECT path, which only matches an option by exact text.
+
+Measured on the two photos that actually caused trouble: `IMG_7101.JPG` 6000×4000 / 29,122 KB
+→ 1800×1200 / 536 KB (−98%, 715 ms, one round) and `DAY4-70.jpeg` 3500×2334 / 1,659 KB →
+1800×1200 / 272 KB (−84%, 133 ms). A 38 MB folio payload becomes roughly 8 MB, well under the
+413 threshold. Integration on a live folio is **not yet exercised** — the TCASFolio session
+needs a ThaID re-login after each browser restart, and reloading the unpacked extension
+requires restarting Chromium. Test it on the next real block.
