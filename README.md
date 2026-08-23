@@ -1,4 +1,4 @@
-# Doodee future
+# Doodee future | tcasfolio extension
 
 ส่วนขยาย Chrome (MV3) สำหรับกรอกแฟ้มสะสมผลงานลง **TCASFolio** (`student.mytcas.com`)
 เก็บผลงานไว้ในเครื่องครั้งเดียว แล้วกดปุ่มเดียวให้มันสร้างบล็อก กรอกทุกช่อง และแนบรูปให้
