@@ -107,13 +107,19 @@ test("segment ปิดชิ้นที่ขอบหน้า ไม่ล�
 
 test("segment รายงานหน้าที่ข้าม พร้อมเหตุผล", () => {
   const out = P.segment([
-    { page: 1, lines: ["PORTFOLIO", "ชื่อ นาย ก"] }, // หน้าปก ไม่มีย่อหน้ายาว
+    { page: 1, lines: ["รูปกิจกรรม", "ถ่ายเมื่อ 2569"] }, // หน้ารูปล้วน ไม่มีย่อหน้ายาว
     { page: 2, lines: ["หัวข้อ", "ค".repeat(200)] },
   ]);
   assert.equal(out.drafts.length, 1);
   assert.equal(out.skipped.length, 1);
   assert.equal(out.skipped[0].page, 1);
   assert.match(out.skipped[0].why, /ย่อหน้า/);
+});
+
+test("segment ข้ามหน้าปกด้วยเหตุผลของมันเอง ไม่ใช่เหตุผลว่าไม่มีย่อหน้า", () => {
+  const out = P.segment([{ page: 1, lines: ["PORTFOLIO", "ชื่อ นาย ก"] }]);
+  assert.equal(out.drafts.length, 0);
+  assert.match(out.skipped[0].why, /ปก/);
 });
 
 test("segment รวมหลายย่อหน้าใต้หัวข้อเดียวด้วยการขึ้นบรรทัด", () => {
@@ -268,4 +274,66 @@ test("dropOverlapping ทิ้งชิ้นซ้ำที่ข้อคว�
 test("clean ล้างอักขระควบคุมที่ pdf.js ส่งมาปน", () => {
   assert.equal(P.clean("\u0000\u0001ปกติ"), "ปกติ");
   assert.equal(P.clean("ท้าทาย"), "ท้าทาย");
+});
+
+test("isProfilePage จับหน้าปกและหน้าประวัติ/transcript", () => {
+  assert.equal(P.isProfilePage(["PORTFOLIO", "Nonthanaphong Saechua", "2026"]).skip, true);
+  assert.equal(
+    P.isProfilePage([
+      "Name: Nonthanaphong Surname: Saechua",
+      "Contact: 061-6564406 Email: saechua2551@gmail.com",
+    ]).skip,
+    true,
+  );
+  assert.equal(
+    P.isProfilePage(["EDUCATION TRANSCRIPT", "High school: Assumption College Thonburi Program: DS"]).skip,
+    true,
+  );
+  assert.equal(P.isProfilePage(["ABOUT ME", "ผมชอบเขียนโปรแกรมตั้งแต่ ม.ต้น"]).skip, true);
+});
+
+test("isProfilePage ไม่ข้ามหน้าผลงานที่บังเอิญพูดถึงโรงเรียนหรือการศึกษา", () => {
+  assert.equal(
+    P.isProfilePage([
+      "ACT Brand Ambassador 2025 - Content Creator",
+      "ได้รับคัดเลือกให้เป็นตัวแทนโรงเรียนทำคอนเทนต์ประชาสัมพันธ์กิจกรรมของโรงเรียน",
+    ]).skip,
+    false,
+  );
+  assert.equal(
+    P.isProfilePage(["ค่าย KhanKnot", "เข้าร่วมค่ายวิศวกรรมที่มหาวิทยาลัยมหิดล ได้เรียนรู้การทำงานเป็นทีม"]).skip,
+    false,
+  );
+});
+
+test("segment ข้ามหน้าปก/ประวัติ พร้อมบอกเหตุผลที่อ่านรู้เรื่อง", () => {
+  const body = "ก".repeat(200);
+  const out = P.segment([
+    { page: 1, lines: ["EDUCATION TRANSCRIPT", `High school: Assumption College Thonburi ${body}`] },
+    { page: 2, lines: ["ผลงานจริง", body] },
+  ]);
+  assert.equal(out.drafts.length, 1);
+  assert.equal(out.drafts[0].page, 2);
+  assert.equal(out.skipped.length, 1);
+  assert.match(out.skipped[0].why, /ประวัติ|ปก/);
+});
+
+test("isProfilePage ไม่ข้ามผลงานที่เล่าถึงการทำพอร์ตของตัวเอง", () => {
+  const r = P.isProfilePage([
+    "Doodee future - Team project",
+    "พัฒนาแพลตฟอร์มช่วยนักเรียนวิเคราะห์และจัดการ portfolio สำหรับยื่นเข้ามหาวิทยาลัย " +
+      "โดยใช้ AI วิเคราะห์จุดเด่นและเสนอแนวทางพัฒนาให้ผู้ใช้เห็นภาพชัดเจนขึ้น",
+  ]);
+  assert.equal(r.skip, false);
+});
+
+test("isProfilePage ไม่ข้ามหน้าผลงานที่มีคำว่า portfolio และ skills ปนอยู่", () => {
+  // วัดจริง: หน้า Pranakorn.dev มีทั้ง "portfolio" ในเนื้อหาและ "Tech Stack/skills" ข้าง ๆ
+  const r = P.isProfilePage([
+    "Pranakorn.dev - Business project",
+    "Tech Stack skills",
+    "I am incredibly proud to have contributed to solving problems and developing various " +
+      "sections of the website, including the Team Section and Pricing Section of their portfolio",
+  ]);
+  assert.equal(r.skip, false);
 });

@@ -359,6 +359,43 @@
     return guessFrom(LEVEL_HINTS, text);
   }
 
+  // หน้าปก / หน้าประวัติ / transcript ไม่ใช่ผลงาน — ข้ามไปเลย
+  //
+  // ใช้ "คู่คำที่อยู่ด้วยกันเฉพาะในหน้าพวกนี้" ไม่ใช่คำเดี่ยว ๆ เพราะคำอย่าง
+  // โรงเรียน/การศึกษา โผล่ในผลงานจริงเต็มไปหมด (ACT Brand Ambassador, ค่ายมหิดล)
+  // คำเดี่ยวที่ใช้ได้มีแค่ transcript / about me ซึ่งไม่ค่อยโผล่ในเนื้อผลงาน
+  const PROFILE_ALONE = ["transcript", "about me", "เกี่ยวกับฉัน", "ประวัติส่วนตัว"];
+  const PROFILE_PAIRS = [
+    [["name:", "ชื่อ-นามสกุล"], ["surname:", "นามสกุล"]],
+    [["contact:", "ติดต่อ"], ["email:", "อีเมล"]],
+    [["education"], ["program:", "school:", "gpax", "เกรดเฉลี่ย"]],
+    // ห้ามใส่คู่ portfolio+skills — วัดจริงแล้วมันไปกินหน้าผลงาน (Pranakorn.dev
+    // มีคำว่า portfolio ในเนื้อหา และ "skills" จากคำว่า Tech Stack/skills ข้าง ๆ)
+    // หน้าปกจับด้วยกฎความยาวด้านล่างแทน
+  ];
+
+  function isProfilePage(lines) {
+    const hay = (lines || []).join(" ").toLowerCase();
+    if (!hay.trim()) return { skip: false, why: "" };
+
+    for (const word of PROFILE_ALONE) {
+      if (hay.includes(word)) return { skip: true, why: `เป็นหน้าประวัติ/ปก (เจอคำว่า "${word}")` };
+    }
+    for (const [first, second] of PROFILE_PAIRS) {
+      const a = first.find((w) => hay.includes(w));
+      const b = second.find((w) => hay.includes(w));
+      if (a && b) return { skip: true, why: `เป็นหน้าประวัติ/ปก (เจอ "${a}" คู่กับ "${b}")` };
+    }
+
+    // หน้าปก: มีคำว่า portfolio และข้อความทั้งหน้าสั้นมาก (ชื่อ + ปี + คำโปรย)
+    // ต้องดูความยาวด้วย ไม่งั้นจะไปโดนผลงานที่เล่าถึงการทำพอร์ตของตัวเอง
+    if (hay.includes("portfolio") && hay.length < 120) {
+      return { skip: true, why: "เป็นหน้าปก (มีคำว่า portfolio และข้อความน้อย)" };
+    }
+
+    return { skip: false, why: "" };
+  }
+
   // บรรทัดของทุกหน้า → ร่าง: หัวข้อคือบรรทัดสั้นที่ตามด้วยย่อหน้ายาว
   // ขอบหน้าปิดชิ้นเสมอ — เล่มออกแบบอิสระ การลากข้ามหน้าเดาผิดบ่อยกว่าเดาถูก
   function segment(pages) {
@@ -368,6 +405,13 @@
     for (const entry of pages || []) {
       const page = Number(entry && entry.page) || 0;
       const lines = ((entry && entry.lines) || []).map((l) => String(l).trim()).filter(Boolean);
+
+      const profile = isProfilePage(lines);
+      if (profile.skip) {
+        skipped.push({ page, why: profile.why });
+        continue;
+      }
+
       const bodies = lines.filter((l) => l.length >= BODY_MIN);
       if (!bodies.length) {
         skipped.push({ page, why: "ไม่มีย่อหน้าที่ยาวพอจะเป็นรายละเอียดผลงาน" });
@@ -436,6 +480,7 @@
     repairThai,
     repairRows,
     groupParagraphs,
+    isProfilePage,
     guessType,
     guessLevel,
     segment,
