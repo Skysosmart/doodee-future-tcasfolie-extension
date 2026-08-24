@@ -417,6 +417,12 @@ el("exportBtn").addEventListener("click", async () => {
   }
 });
 
+// หน้านำเข้า PDF เป็นแท็บของตัวเอง ไม่ทำใน popup เพราะ popup ปิดตัวเองเมื่อคลิกที่อื่น
+// แต่การอ่านทั้งเล่มใช้เวลาหลายวินาที และหน้าตรวจร่างต้องการพื้นที่
+el("pdfBtn").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
+});
+
 el("importBtn").addEventListener("click", () => el("importFile").click());
 el("welcomeImport").addEventListener("click", () => el("importFile").click());
 

@@ -78,6 +78,29 @@ button {
 .row { display: flex; gap: 6px; }
 .row .ghost { flex: 1; }
 
+/* ปุ่มนำเข้า PDF — เด่นกว่า ghost เพราะเป็นทางเข้าที่เร็วที่สุดสำหรับคนที่มีเล่มอยู่แล้ว
+   แต่เบากว่า saveBtn เพราะไม่ใช่การกระทำหลักของหน้านี้ */
+.wide {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.wide:hover {
+  background: rgba(91, 140, 255, 0.12);
+}
+
+.hint {
+  margin: 6px 0 0;
+  color: var(--dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 #status { min-height: 16px; margin: 8px 0 0; font-size: 12px; }
 #status.ok { color: var(--ok); }
 #status.error { color: var(--danger); }

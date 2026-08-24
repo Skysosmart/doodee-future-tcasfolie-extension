@@ -413,3 +413,26 @@ result, detail, tags); 17 tests. Fill and attach engines untouched.
 Verified on the live site: 56 cards render, "camp" narrows to 8, `⋯` reveals the four
 secondary buttons, panel width 360 and `elementFromPoint` at the page centre still returns the
 page (the C1 overlay check), title font resolves to `kvl`.
+
+Ruling 24 — PDF import shipped as a separate subsystem (2026-08-24). The owner asked for the
+extension to read an unstructured PDF portfolio and turn it into vault entries, and asked
+explicitly that it be **added, not woven into** what already works. So `content.js`,
+`content.css`, `storage.js`, `model.js` and `inject.js` are untouched; the new pieces are
+`pdfText.js`, `pdfImage.js`, `import.html/.css/.js`, vendored `pdf.js`, and exactly one button
+in `popup.html`. The importer carries its own image-shrinking code rather than reusing the
+copy in `content.js` — duplication accepted so the working system stays at zero risk.
+
+Design and every measurement live in `docs/superpowers/specs/2026-08-24-pdf-import-design.md`.
+Three findings worth repeating here:
+
+- Canva embeds each Thai line twice, one copy with its tone marks stripped, and **draws them
+  on top of each other**. Page 8 of the real book has 82 word pairs overlapping by >50%.
+  Filtering by box overlap beats every string heuristic tried before it.
+- `variantScore` needs the ำ / ํา terms. Mark counts alone tie between the two copies, and the
+  crippled one then wins.
+- pdf.js does not report how large an image is drawn; the transform matrix has to be walked
+  (save/restore/transform) or the background filter silently never fires.
+
+Known and accepted: images are over-collected (114 from a 10-page book) because Canva slices
+one picture into several XObjects. Nothing is saved without an explicit click, so this is
+clutter, not data loss. Next thing to try is grouping fingerprints by hamming distance.
