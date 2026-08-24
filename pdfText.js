@@ -56,6 +56,25 @@
     return found ? found.length : 0;
   }
 
+  // เศษที่ Canva ทิ้งไว้อีกแบบ: วรรณยุกต์/สระลอยเดี่ยว ๆ ไม่ทับใคร แต่พอต่อบรรทัด
+  // จะไปเกาะคำถัดไป ("ปฏิบัติงานที่" + "ัิ" + "โรงพยาบาล" → "ปฏิบัติงานที่ัิโรงพยาบาล")
+  // item ที่ไม่มีพยัญชนะ/ตัวเลข/ตัวอักษรละตินเลย ไม่ใช่คำ ทิ้งได้ปลอดภัย
+  // (ๆ ฯ ไม่ใช่เครื่องหมายผสม จึงไม่ถูกทิ้ง)
+  // "ตัวจริง" ที่ยืนได้เอง: พยัญชนะไทย ก-ฮ · สระที่เขียนเรียงบรรทัด (ะ า เ-ไ ฤ ฦ) ·
+  // ๆ ฯ · เลขไทย/อารบิก · อักษรละติน · เครื่องหมายวรรคตอนและสัญลักษณ์ทั่วไป
+  // ห้ามใช้ช่วง [ะ-ๅ] เพราะมันครอบ ั ิ ี ึ ื ุ ู (เครื่องหมายผสม) เข้ามาด้วย
+  // ต้องนับวรรคตอนเป็นตัวจริงด้วย ไม่งั้นจะกิน "&" "-" "." ในหัวข้อไปหมด
+  // (วัดจริง: "MakeX: Challenger - Robotics" กลายเป็น "MakeX: Challenger Robotics")
+  const STANDALONE = /[ก-ฮะาเ-ไฤฦๆฯ๐-๙A-Za-z0-9!-\/:-@\[-`{-~]/;
+
+  function dropOrphanMarks(items) {
+    return (items || []).filter((item) => {
+      const str = String((item && item.str) || "");
+      if (!str.trim()) return false;
+      return STANDALONE.test(str);
+    });
+  }
+
   // Canva วาดสองชุด "ทับกันสนิท" ในหน้า — วัดจริงหน้า 8 ของเล่ม MU CPE:
   // ชุดสมบูรณ์เป็น item เดียวยาว ชุดพิการเป็นเศษหลายชิ้น กล่องซ้อนกัน 100%
   // ตัดด้วยเรขาคณิตตรงนี้แม่นกว่าเดาจากสตริง เพราะจับได้ทั้งกรณีที่ถูกตัดกลางคำ
@@ -374,7 +393,7 @@
   function toDrafts(pages) {
     const prepared = (pages || []).map((p) => ({
       page: Number(p && p.page) || 0,
-      lines: groupParagraphs(repairRows(buildRows(dropOverlapping((p && p.items) || [])))),
+      lines: groupParagraphs(repairRows(buildRows(dropOrphanMarks(dropOverlapping((p && p.items) || []))))),
     }));
 
     const { drafts, skipped } = segment(prepared);
@@ -397,6 +416,7 @@
     joinParts,
     boxOverlapRatio,
     dropOverlapping,
+    dropOrphanMarks,
     dropTwins,
     buildRows,
     buildLines,

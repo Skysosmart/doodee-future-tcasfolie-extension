@@ -231,3 +231,26 @@ test("dropOverlapping ทนกับ item ที่ไม่มีขนาด 
   ];
   assert.equal(P.dropOverlapping(items).length, 2, "ไม่มีขนาด = วัดการซ้อนไม่ได้ ต้องไม่เดาทิ้ง");
 });
+
+test("dropOrphanMarks ทิ้ง item ที่มีแต่เครื่องหมายไม่มีพยัญชนะ", () => {
+  // เศษที่ Canva ทิ้งไว้: วรรณยุกต์/สระลอยเดี่ยว ๆ ไม่ทับใคร แต่ไปเกาะคำถัดไป
+  // ทำให้ได้ "ปฏิบัติงานที่ัิโรงพยาบาล"
+  const kept = P.dropOrphanMarks([
+    { str: "ปฏิบัติงานที่", x: 10, y: 700, w: 80, h: 14 },
+    { str: "ัิ", x: 95, y: 700, w: 6, h: 14 },
+    { str: "โรงพยาบาล", x: 105, y: 700, w: 60, h: 14 },
+  ]);
+  assert.deepEqual(kept.map((i) => i.str), ["ปฏิบัติงานที่", "โรงพยาบาล"]);
+});
+
+test("dropOrphanMarks ไม่แตะคำปกติ ตัวเลข หรือคำอังกฤษ", () => {
+  const items = [
+    { str: "ที่", x: 0, y: 0 },
+    { str: "2026", x: 0, y: 0 },
+    { str: "MakeX", x: 0, y: 0 },
+    { str: "ๆ", x: 0, y: 0 },
+    { str: "&", x: 0, y: 0 }, // วรรคตอนในหัวข้อ ห้ามทิ้ง
+    { str: "-", x: 0, y: 0 },
+  ];
+  assert.equal(P.dropOrphanMarks(items).length, 6);
+});
