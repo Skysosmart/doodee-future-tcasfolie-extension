@@ -56,6 +56,48 @@
     return found ? found.length : 0;
   }
 
+  // Canva วาดสองชุด "ทับกันสนิท" ในหน้า — วัดจริงหน้า 8 ของเล่ม MU CPE:
+  // ชุดสมบูรณ์เป็น item เดียวยาว ชุดพิการเป็นเศษหลายชิ้น กล่องซ้อนกัน 100%
+  // ตัดด้วยเรขาคณิตตรงนี้แม่นกว่าเดาจากสตริง เพราะจับได้ทั้งกรณีที่ถูกตัดกลางคำ
+  //
+  // เก็บ item ที่ variantScore ดีกว่า (เท่ากันเอาตัวยาวกว่า) — item ที่ไม่มี w/h
+  // วัดการซ้อนไม่ได้ ต้องไม่เดาทิ้ง ไม่งั้นตัวอ่านที่ไม่ให้ขนาดจะได้หน้าว่าง
+  function boxOverlapRatio(a, b) {
+    const aw = Number(a.w);
+    const ah = Number(a.h);
+    const bw = Number(b.w);
+    const bh = Number(b.h);
+    if (!(aw > 0 && ah > 0 && bw > 0 && bh > 0)) return 0;
+    const ax = Number(a.x) || 0;
+    const ay = Number(a.y) || 0;
+    const bx = Number(b.x) || 0;
+    const by = Number(b.y) || 0;
+    const ix = Math.min(ax + aw, bx + bw) - Math.max(ax, bx);
+    const iy = Math.min(ay + ah, by + bh) - Math.max(ay, by);
+    if (ix <= 0 || iy <= 0) return 0;
+    return (ix * iy) / Math.min(aw * ah, bw * bh);
+  }
+
+  function dropOverlapping(items, minRatio) {
+    const list = (items || []).filter((i) => i && String(i.str || "").trim());
+    const limit = Number.isFinite(minRatio) ? minRatio : 0.5;
+    const drop = new Set();
+
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = 0; j < list.length; j += 1) {
+        if (i === j || drop.has(i)) continue;
+        if (boxOverlapRatio(list[i], list[j]) < limit) continue;
+        const a = variantScore(list[i].str);
+        const b = variantScore(list[j].str);
+        const bIsBetter =
+          b > a || (b === a && String(list[j].str).length > String(list[i].str).length);
+        if (bIsBetter) drop.add(i);
+      }
+    }
+
+    return list.filter((_, i) => !drop.has(i));
+  }
+
   // ต่อ item ในบรรทัดเดียวกัน: ภาษาไทยไม่เว้นคำ และ pdf.js ซอย item กลางคำ
   // จึงต่อตรง ๆ — ยกเว้นตรงที่มีช่องว่างจริงในหน้า (วัดจาก x) หรือคำอังกฤษชนกัน
   function joinParts(parts) {
@@ -332,7 +374,7 @@
   function toDrafts(pages) {
     const prepared = (pages || []).map((p) => ({
       page: Number(p && p.page) || 0,
-      lines: groupParagraphs(repairRows(buildRows((p && p.items) || []))),
+      lines: groupParagraphs(repairRows(buildRows(dropOverlapping((p && p.items) || [])))),
     }));
 
     const { drafts, skipped } = segment(prepared);
@@ -353,6 +395,8 @@
     countMarks,
     variantScore,
     joinParts,
+    boxOverlapRatio,
+    dropOverlapping,
     dropTwins,
     buildRows,
     buildLines,
