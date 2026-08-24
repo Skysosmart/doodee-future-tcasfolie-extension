@@ -106,10 +106,17 @@
       for (let j = 0; j < list.length; j += 1) {
         if (i === j || drop.has(i)) continue;
         if (boxOverlapRatio(list[i], list[j]) < limit) continue;
-        const a = variantScore(list[i].str);
-        const b = variantScore(list[j].str);
-        const bIsBetter =
-          b > a || (b === a && String(list[j].str).length > String(list[i].str).length);
+        const sa = String(list[i].str);
+        const sb = String(list[j].str);
+        // ข้อความเหมือนกันเป๊ะและกล่องทับกัน = ชิ้นซ้ำ (pdf.js ซอย glyph run ซ้อนกัน)
+        // เก็บตัวที่มาก่อนไว้ ไม่งั้นคะแนนเท่ากันแล้วไม่มีใครถูกทิ้ง จะได้ SOPSOPSOP
+        if (sa === sb) {
+          if (j < i) drop.add(i);
+          continue;
+        }
+        const a = variantScore(sa);
+        const b = variantScore(sb);
+        const bIsBetter = b > a || (b === a && sb.length > sa.length);
         if (bIsBetter) drop.add(i);
       }
     }
@@ -119,6 +126,11 @@
 
   // ต่อ item ในบรรทัดเดียวกัน: ภาษาไทยไม่เว้นคำ และ pdf.js ซอย item กลางคำ
   // จึงต่อตรง ๆ — ยกเว้นตรงที่มีช่องว่างจริงในหน้า (วัดจาก x) หรือคำอังกฤษชนกัน
+  // pdf.js บางทีส่ง U+0000 หรืออักขระควบคุมมาปนใน str ถ้าปล่อยไว้จะไปโผล่ในร่าง
+  function clean(text) {
+    return String(text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
+  }
+
   function joinParts(parts) {
     let out = "";
     for (let i = 0; i < parts.length; i += 1) {
@@ -144,7 +156,7 @@
     const tol = Number.isFinite(tolerance) ? tolerance : 2;
     const rows = [];
     for (const item of items || []) {
-      const str = item && typeof item.str === "string" ? item.str : "";
+      const str = clean(item && typeof item.str === "string" ? item.str : "");
       if (!str.trim()) continue;
       const y = Number(item.y) || 0;
       const x = Number(item.x) || 0;
@@ -410,6 +422,7 @@
   root.PdfText = {
     TITLE_MAX,
     BODY_MIN,
+    clean,
     stripMarks,
     countMarks,
     variantScore,

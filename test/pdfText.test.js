@@ -254,3 +254,18 @@ test("dropOrphanMarks ไม่แตะคำปกติ ตัวเลข �
   ];
   assert.equal(P.dropOrphanMarks(items).length, 6);
 });
+
+test("dropOverlapping ทิ้งชิ้นซ้ำที่ข้อความเหมือนกันเป๊ะและกล่องทับกัน", () => {
+  // pdf.js ซอย glyph run ซ้อนกัน ทำให้ได้ item เดียวกันหลายชิ้น จะได้ SOPSOPSOP
+  const kept = P.dropOverlapping([
+    { str: "SOP", x: 10, y: 700, w: 30, h: 16 },
+    { str: "SOP", x: 10, y: 700, w: 30, h: 16 },
+    { str: "SOP", x: 11, y: 700, w: 30, h: 16 },
+  ]);
+  assert.equal(kept.length, 1);
+});
+
+test("clean ล้างอักขระควบคุมที่ pdf.js ส่งมาปน", () => {
+  assert.equal(P.clean("\u0000\u0001ปกติ"), "ปกติ");
+  assert.equal(P.clean("ท้าทาย"), "ท้าทาย");
+});

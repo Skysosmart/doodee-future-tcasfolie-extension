@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <title>นำเข้าพอร์ตจาก PDF — Doodee future</title>
+    <link rel="stylesheet" href="import.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="brand">Doodee</span>
+      <span class="crumb">นำเข้าพอร์ตจากไฟล์ PDF</span>
+    </header>
+
+    <main class="wrap">
+      <!-- 1 · เลือกไฟล์ -->
+      <section id="pick" class="card">
+        <h1>เลือกไฟล์เล่มพอร์ต</h1>
+        <p class="lead">
+          ระบบจะอ่านหัวข้อ รายละเอียด และรูปในเล่มออกมาเป็นร่างผลงาน
+          แล้วให้ตรวจก่อนบันทึกเข้าคลัง
+        </p>
+
+        <label id="drop" class="drop" for="file">
+          <input id="file" type="file" accept="application/pdf,.pdf" hidden />
+          <span class="drop-title">ลากไฟล์ PDF มาวาง</span>
+          <span class="drop-sub">หรือคลิกเพื่อเลือกไฟล์</span>
+        </label>
+
+        <p class="privacy">
+          ไฟล์อ่านในเครื่องของคุณเท่านั้น ไม่ถูกอัปโหลดไปที่ไหน
+        </p>
+        <p id="pickError" class="error" hidden></p>
+      </section>
+
+      <!-- 2 · กำลังอ่าน -->
+      <section id="reading" class="card" hidden>
+        <h1>กำลังอ่านเล่ม…</h1>
+        <p id="readingStatus" class="lead">เตรียมไฟล์</p>
+        <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+        <button id="cancelRead" type="button" class="ghost">ยกเลิก</button>
+      </section>
+
+      <!-- 3 · ตรวจร่าง -->
+      <section id="review" hidden>
+        <div class="reviewhead card">
+          <div>
+            <h1 id="reviewTitle">ตรวจร่างผลงาน</h1>
+            <p id="reviewLead" class="lead"></p>
+          </div>
+          <div class="reviewactions">
+            <button id="selectAll" type="button" class="ghost">ติ๊กทั้งหมด</button>
+            <button id="selectNone" type="button" class="ghost">ล้างการติ๊ก</button>
+            <button id="save" type="button" class="primary">บันทึกเข้าคลัง</button>
+          </div>
+        </div>
+
+        <div id="drafts" class="drafts"></div>
+
+        <div id="skipped" class="card skipped" hidden>
+          <h2>หน้าที่ข้ามไป</h2>
+          <ul id="skippedList"></ul>
+        </div>
+
+        <div id="rawBox" class="card" hidden>
+          <h2>อ่านตัวอักษรได้ แต่ตัดเป็นชิ้นไม่ได้</h2>
+          <p class="lead">คัดลอกข้อความรายหน้าไปใช้เองได้</p>
+          <textarea id="raw" rows="14" readonly></textarea>
+        </div>
+      </section>
+
+      <!-- 4 · บันทึกแล้ว -->
+      <section id="done" class="card" hidden>
+        <h1>บันทึกเข้าคลังแล้ว</h1>
+        <p id="doneLead" class="lead"></p>
+        <p class="lead">
+          เปิดหน้าแฟ้มใน TCASFolio แล้วกด <b>＋ ลงพอร์ต</b> ในการ์ดของผลงานที่ต้องการ
+        </p>
+        <button id="again" type="button" class="ghost">นำเข้าไฟล์อื่น</button>
+      </section>
+    </main>
+
+    <script src="model.js"></script>
+    <script src="storage.js"></script>
+    <script src="pdfText.js"></script>
+    <script src="pdfImage.js"></script>
+    <script type="module" src="import.js"></script>
+  </body>
+</html>
