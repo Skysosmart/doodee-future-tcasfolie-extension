@@ -92,8 +92,10 @@ git clone https://github.com/Skysosmart/doodee-future.git
 - **ไม่มีการยิงข้อมูลออกนอกเครื่อง** - ตรวจเองได้ด้วย `grep -rnE 'fetch\(|XMLHttpRequest|sendBeacon' *.js`
   เจอที่เดียวคือ `content.js` บรรทัดที่อ่าน `data:` URL ของรูปในคลังมาย่อ (ไม่ได้ต่อออกไปไหน)
 - ไฟล์ export ของคลัง (`doodee-future-*.json`) เป็นข้อมูลส่วนตัว - `.gitignore` กันไว้แล้ว ห้าม commit
-- **ดึงจากเว็บยิงไปที่ `https://doodee-future.com` เท่านั้น** URL ฝังตายในโค้ด แก้จากหน้าเว็บไม่ได้
-  (`host_permissions` มีโดเมนเดียว) สเปกฝั่งเว็บอยู่ที่ [`docs/web-api-contract.md`](docs/web-api-contract.md)
+- **ดึงจากเว็บยิงไปที่ `https://doodee-future.com` เท่านั้น** path ฝังตายในโค้ด แก้จากหน้าเว็บไม่ได้
+  (`host_permissions` มีโดเมนเดียว) และยิงผ่าน content script ในแท็บของเว็บ ไม่ได้ยิงตรง
+  เพราะคุกกี้เซสชัน `SameSite=Lax` ไม่ถูกส่งข้ามมาที่ `chrome-extension://`
+  สเปกฝั่งเว็บ + route ตัวอย่าง: [`docs/web-api-contract.md`](docs/web-api-contract.md)
 - **ซิงก์/สำรอง/กู้คืนอยู่ที่หน้า `backup.html`** (ปุ่ม `สำรอง / กู้คืน` ใน popup) ไม่ใช่ใน popup
   เพราะ popup ปิดตัวเองตอน file dialog ของระบบเปิด `change` ไม่เคยยิง ไฟล์ที่เลือกหายเงียบ ๆ
 - **`ส่งออกไฟล์สำรอง` เก็บรูปไปด้วย** ไฟล์จะใหญ่ (คลัง 82 ชิ้น 46 รูป = 11 MB) แต่กู้กลับได้ครบ
@@ -114,6 +116,7 @@ model.js       193 บรรทัด  TYPES / LEVELS / normalize / export / par
 storage.js     132        ครอบ chrome.storage.local + จัดการรูปแยกคีย์
 content.js   1,397        แผงในหน้าเว็บ + เอนจินเติมฟอร์ม + เอนจินแนบรูป
 inject.js       52        ตัวช่วยฝั่ง main world — ส่งไฟล์ให้ React ของเว็บรับได้
+site.js         25        content script บน doodee-future.com — ยิง API ให้ด้วยคุกกี้ของเว็บ
 popup.*                   จัดการคลัง: เพิ่ม/แก้/ลบ · แนบรูป · นำเข้า-ส่งออก JSON
 test/*.test.js            51 เทสต์ (model · pdfText · pdfImage)
 docs/superpowers/     บันทึกการตัดสินใจทุกข้อ (Ruling 1–23) + สเปก + ผลรีวิว

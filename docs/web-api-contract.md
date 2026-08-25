@@ -1,19 +1,45 @@
 # สัญญาระหว่าง doodee-future.com กับส่วนขยาย
 
 ส่วนขยายดึงผลงานจากเว็บด้วยปุ่ม **ดึงจากเว็บ** ในหน้า `backup.html`
-เว็บต้องเปิด endpoint เดียว และตอบ JSON ตามรูปแบบด้านล่าง
 
 ```
 GET https://doodee-future.com/api/extension/portfolio
 ```
 
-URL นี้ **ฝังตายในโค้ด** (`backup.js` : `API_URL`) แก้จากหน้าเว็บไม่ได้
-เพื่อไม่ให้โทเคนของผู้ใช้ถูกส่งไปโฮสต์อื่นได้เลย ถ้าจะย้าย path ต้องแก้ที่ตัวส่วนขยาย
+path ฝังตายในโค้ด (`backup.js` : `API_PATH`) แก้จากหน้าเว็บไม่ได้ และ `host_permissions`
+มีโดเมนเดียว — ทั้งสองอย่างเพื่อไม่ให้โทเคนของผู้ใช้ถูกส่งไปโฮสต์อื่นได้เลย
+
+## ยืนยันตัวตนด้วยเซสชันเดิมของเว็บ
+
+เว็บใช้ NextAuth (`auth.ts`) แบบ JWT คุกกี้ `authjs.session-token` เป็น `SameSite=Lax`
+**คำขอจาก `chrome-extension://` เป็น cross-site คุกกี้จะไม่ถูกส่งไปเลย** ส่วนขยายจึงไม่ยิงตรง
+แต่ให้ content script ที่อยู่ในแท็บ doodee-future.com ยิงแทน — เป็น same-origin คุกกี้ทำงานปกติ
+ผู้ใช้แค่ล็อกอินค้างไว้ ไม่ต้องมีโทเคน ไม่ต้องคัดลอกอะไร
+
+```
+backup.html  --chrome.tabs.sendMessage-->  site.js (ในแท็บเว็บ)
+                                              |  fetch("/api/extension/portfolio")
+                                              |  credentials: same-origin
+             <---------- JSON --------------  '
+```
+
+ถ้าไม่มีแท็บเว็บเปิดอยู่ ส่วนขยายจะเปิดให้เองแบบพื้นหลัง ถามเสร็จแล้วปิดคืน
+
+route จึงเขียนแบบเดียวกับหน้า `app/[locale]/profile/portfolio/page.tsx` คือ
+
+```ts
+const session = await auth();
+if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+```
+
+**ไม่ต้องใช้ `/api/v1` + API key** เพราะคีย์ในระบบเป็นของแอดมิน (`api_keys.owner_email`,
+สร้างที่ `/admin/api-keys`) นักเรียนออกเองไม่ได้ และยังต้องแนบ `X-Doodee-User-Id` อีก
+ช่องโทเคนในหน้าส่วนขยายเก็บไว้เป็นทางสำรองเฉยๆ ถ้าวันหนึ่งอยากยิงจากที่อื่น
 
 ## รูปแบบที่ตอบกลับ
 
-เหมือนไฟล์สำรองของส่วนขยายทุกประการ — ใช้ตัวอ่านตัวเดียวกัน (`Model.parseImport`)
-ที่มีเทสต์คุมอยู่แล้ว เว็บส่งไฟล์นี้ให้ดาวน์โหลดตรง ๆ ก็ยังนำเข้าได้เหมือนกัน
+เหมือนไฟล์สำรองของส่วนขยายทุกประการ ใช้ตัวอ่านตัวเดียวกัน (`Model.parseImport`)
+ที่มีเทสต์คุมอยู่แล้ว เว็บจะให้ดาวน์โหลดเป็นไฟล์แทนก็ยังนำเข้าได้เหมือนกัน
 
 ```jsonc
 {
@@ -22,103 +48,87 @@ URL นี้ **ฝังตายในโค้ด** (`backup.js` : `API_URL`)
   "exportedAt": 1756100000000,
   "items": [
     {
-      "id": "ocr-001",                    // ไม่ซ้ำกันในไฟล์ก็พอ ส่วนขยายจัดการเองถ้าชนของเดิม
-      "type": "award",                    // award | project | activity | training | work
+      "id": "ach-128",                        // ไม่ซ้ำกันในก้อนนี้ก็พอ
+      "type": "รางวัล / เกียรติบัตร",           // ห้าค่าเท่านั้น ดูตารางล่าง
       "title": "รางวัลชนะเลิศ MakeX Challenger",
       "org": "สพฐ. ร่วมกับ MakeX Thailand",
-      "level": "national",                // school | local | province | national | international
+      "level": "ระดับชาติ",                    // สี่ค่าเท่านั้น ดูตารางล่าง
       "result": "ชนะเลิศ",
-      "hours": 24,                        // ตัวเลข หรือละไว้
-      "startDate": "2025-11-02",          // ว่างได้
-      "endDate": "2025-11-04",
+      "hours": "24",                          // string ไม่ใช่ number
       "detail": "ออกแบบและเขียนโปรแกรมหุ่นยนต์…",
-      "tags": ["robotics", "programming"],
-      "createdAt": 1756000000000          // ใช้จับคู่รูปตอนนำเข้า ห้ามเปลี่ยนค่าเมื่อส่งซ้ำ
+      "tags": ["robotics"],
+      "createdAt": 1756000000000              // ใช้จับคู่รูปตอนนำเข้า ห้ามเปลี่ยนเมื่อส่งซ้ำ
     }
   ],
   "images": {
-    "ocr-001": [
-      { "name": "makex-cert.jpg", "type": "image/jpeg", "data": "data:image/jpeg;base64,/9j/4AAQ…" }
+    "ach-128": [
+      { "name": "makex.jpg", "type": "image/jpeg", "data": "data:image/jpeg;base64,/9j/4AAQ…" }
     ]
   }
 }
 ```
 
-**ข้อบังคับของรูป** `data` ต้องเป็น `data:image/(jpeg|jpg|png|webp|gif);base64,…` เท่านั้น
-ลิงก์ `https://…` จะถูกตัดทิ้ง (กัน `javascript:` และ SVG ที่ฝังสคริปต์) ส่วนขยายจะขึ้นเตือนว่า
-ตัดไปกี่ใบ ไม่เงียบ ถ้าเว็บเก็บรูปไว้ที่ storage ต้องอ่านมาแปลงเป็น base64 ก่อนตอบ
+ไม่มีช่อง `startDate` / `endDate` — ส่วนขยายไม่มีที่เก็บ ถ้าอยากให้วันที่ติดไปด้วย
+ใส่ไว้ในบรรทัดแรกของ `detail` ฟิลด์ที่ไม่รู้จักจะถูกตัดทิ้งตอน `normalize`
 
-**ขนาด** TCASFolio รับไฟล์ต่อใบไหวราว 1.2 MB / ด้านยาว 1800 px (เกินกว่านั้นตอนกดบันทึกแฟ้ม
-จะได้ 413 ที่โผล่มาเป็น "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ") ส่วนขยายย่อให้ก่อนอัปอยู่แล้ว
-แต่ถ้าเว็บย่อมาให้เลยจะประหยัดทั้งเวลาโหลดและพื้นที่ในคลัง
+### `type` — ห้าค่านี้เท่านั้น
 
-## การยืนยันตัวตน
+เขียนผิดแม้แต่ช่องว่างเดียว ปุ่ม `＋ ลงพอร์ต` จะหาปุ่มของ TCASFolio ไม่เจอ
 
-รองรับสองทาง ทำอย่างใดอย่างหนึ่งก็พอ
+| ค่าที่ต้องส่ง | ไปกดปุ่มไหนใน TCASFolio | มาจาก `achievement_type` |
+|---|---|---|
+| `รางวัล / เกียรติบัตร` | เพิ่มรางวัล | `academic` `competition` `sports` `certification` |
+| `โครงงาน / วิจัย` | เพิ่มโครงงาน | (ยังไม่มีในเว็บ) |
+| `กิจกรรม` | เพิ่มกิจกรรม | `leadership` `community_service` + ทุกแถวใน `user_extracurricular` |
+| `การอบรม` | เพิ่มการอบรม | (ยังไม่มีในเว็บ) |
+| `ผลงานสร้างสรรค์` | เพิ่มผลงาน | `arts` |
 
-1. **คุกกี้** ส่วนขยายยิงด้วย `credentials: "include"` แต่คำขอมาจาก origin
-   `chrome-extension://…` ซึ่งนับเป็น cross-site — คุกกี้ที่ตั้ง `SameSite=Lax`
-   (ค่าเริ่มต้นของ NextAuth) **จะไม่ถูกส่งมา** ถ้าจะใช้ทางนี้ คุกกี้ต้องเป็น
-   `SameSite=None; Secure`
-2. **โทเคน** ส่วนขยายส่ง `Authorization: Bearer <token>` ถ้าผู้ใช้วางโทเคนไว้
-   เว็บออกโทเคนอายุยาวให้ที่หน้าโปรไฟล์ ทางนี้ไม่ติดเรื่อง SameSite เลย — **แนะนำ**
+### `level` — สี่ค่านี้เท่านั้น
 
-ตอบ `401` เมื่อไม่ผ่าน ส่วนขยายจะบอกผู้ใช้ให้ไปใช้โทเคน ไม่ใช่ขึ้นเลขดิบ
+ตรงกับตัวเลือกในช่อง "ระดับ" ของ TCASFolio เป๊ะ ๆ **ค่าอื่นจะถูกล้างเป็นว่าง** ไม่ error
 
-## CORS
+| ค่าที่ต้องส่ง | ตรงกับ `achievement_level` ในฐานข้อมูล |
+|---|---|
+| `ระดับโรงเรียน/สถาบัน` | `school` |
+| `ระดับจังหวัด/เขต/ภาค` | `regional` (และ `local`, `province`) |
+| `ระดับชาติ` | `national` |
+| `ระดับนานาชาติ` | `international` |
 
-ส่วนขยายมี `host_permissions` ของโดเมนนี้ จึงอ่านคำตอบได้โดยไม่ต้องมี
-`Access-Control-Allow-Origin` แต่ถ้าจะให้ยิงจากหน้าเว็บอื่นด้วย ค่อยเพิ่มทีหลัง
+### แปลงจากตารางที่มีอยู่แล้ว
 
-## ตัวอย่าง route (Next.js App Router)
+| ฟิลด์ส่วนขยาย | `user_achievements` | `user_extracurricular` |
+|---|---|---|
+| `type` | จาก `achievement_type` (ดูตารางบน) | `กิจกรรม` |
+| `title` | `title` | `activity_name` |
+| `org` | `organization` | `organization` |
+| `level` | `achievement_level` | เว้นว่าง |
+| `result` | ไม่มี — ดึงจาก `title`/`description` ถ้ามี | `role` |
+| `hours` | ไม่มี | `hours_committed` (แปลงเป็น string) |
+| `detail` | `description` | `description` + `impact_description` |
+| `createdAt` | `created_at` เป็น epoch ms | `created_at` เป็น epoch ms |
+| รูป | `certificate_url` + `evidence_urls` | ไม่มี |
 
-```ts
-// app/api/extension/portfolio/route.ts
-import { NextResponse } from "next/server";
+กรองด้วย `portfolio_visibility = true` และควรกรอง `verification_status` ที่ยังไม่ผ่านออก
+ผลจาก OCR ที่อยู่ใน `user_competition_entries` (`source_type = 'portfolio_ai'`) ส่งมาได้เหมือนกัน
+โดยแมป `raw_competition_name` -> `title`, `raw_organization` -> `org`,
+`raw_achievement_level` -> `level`, `raw_description` -> `detail`
 
-export const dynamic = "force-dynamic";
+## รูป
 
-export async function GET(req: Request) {
-  const user = await authFromBearerOrCookie(req); // ของเว็บเอง
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+`data` ต้องเป็น `data:image/(jpeg|jpg|png|webp|gif);base64,…` เท่านั้น
+ลิงก์ `https://…` จะถูกตัดทิ้ง (กัน `javascript:` กับ SVG ที่ฝังสคริปต์) ส่วนขยายจะขึ้นเตือนว่า
+ตัดไปกี่ใบ ไม่เงียบ รูปอยู่บน R2 จึงต้องดึงมาแปลงเป็น base64 ฝั่งเซิร์ฟเวอร์ก่อนตอบ
 
-  const rows = await db.portfolioItem.findMany({ where: { userId: user.id } });
+TCASFolio รับไหวราว **1.2 MB / ด้านยาว 1800 px** ต่อใบ เกินกว่านั้นตอนกดบันทึกแฟ้มจะได้ 413
+ที่โผล่มาเป็น "เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ" ส่วนขยายย่อให้ก่อนอัปอยู่แล้ว แต่ถ้าเว็บย่อมาให้เลย
+จะประหยัดทั้งเวลาโหลดและพื้นที่ในคลัง
 
-  const items = rows.map((r) => ({
-    id: r.id,
-    type: r.type,
-    title: r.title,
-    org: r.org ?? "",
-    level: r.level ?? "",
-    result: r.result ?? "",
-    hours: r.hours ?? undefined,
-    startDate: r.startDate ?? "",
-    endDate: r.endDate ?? "",
-    detail: r.detail ?? "",
-    tags: r.tags ?? [],
-    createdAt: r.createdAt.getTime(),
-  }));
+รับ `?images=0` ด้วยจะดี ไว้ให้ดึงเฉพาะข้อความตอนอยากได้เร็ว ๆ
 
-  const images: Record<string, { name: string; type: string; data: string }[]> = {};
-  for (const r of rows) {
-    const files = await loadCertificates(r.id); // คืน Buffer + mime
-    if (!files.length) continue;
-    images[r.id] = files.map((f) => ({
-      name: f.name,
-      type: f.mime,
-      data: `data:${f.mime};base64,${f.buffer.toString("base64")}`,
-    }));
-  }
+## ตัวอย่าง route
 
-  return NextResponse.json({
-    app: "doodee-future",
-    version: 1,
-    exportedAt: Date.now(),
-    items,
-    images,
-  });
-}
-```
+วางได้ที่ `app/api/extension/portfolio/route.ts` — ตัวเต็มอยู่ใน
+[`docs/web-route-example.ts`](web-route-example.ts) ก๊อปไปวางแล้วแก้ตรงที่ยังไม่ตรงกับของจริง
 
 ## ฝั่งส่วนขยายทำอะไรกับของที่ได้
 
@@ -128,5 +138,5 @@ export async function GET(req: Request) {
 
 ## ยังไม่ทำ
 
-`PUT` กลับขึ้นเว็บ — ตอนนี้เป็นทางเดียว เว็บ -> ส่วนขยาย
-ถ้าจะซิงก์สองทางต้องคุยเรื่องว่าใครชนะเมื่อแก้ทั้งสองฝั่ง ยังไม่มีคำตอบ จึงยังไม่ทำ
+`PUT` กลับขึ้นเว็บ — ตอนนี้ทางเดียว เว็บ -> ส่วนขยาย
+ซิงก์สองทางต้องตอบก่อนว่าใครชนะเมื่อแก้ทั้งสองฝั่ง ยังไม่มีคำตอบ จึงยังไม่ทำ
