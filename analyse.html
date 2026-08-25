@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <title>วิเคราะห์พอร์ต — Doodee future</title>
+    <link rel="stylesheet" href="import.css" />
+    <link rel="stylesheet" href="backup.css" />
+    <link rel="stylesheet" href="analyse.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="brand">Doodee</span>
+      <span class="crumb">วิเคราะห์พอร์ตจากคลัง</span>
+    </header>
+
+    <main class="wrap">
+      <section class="card">
+        <h1>วิเคราะห์จากคลังของคุณ</h1>
+        <p class="lead">
+          ส่งข้อความในคลังไปให้ระบบวิเคราะห์ของ doodee-future.com
+          ได้จุดแข็ง จุดที่ควรเพิ่ม และคณะที่เข้าทาง — ไม่ต้องอัปเล่ม PDF ใหม่
+        </p>
+
+        <div class="stats">
+          <div class="stat"><b id="statItems">–</b><span>ผลงานในคลัง</span></div>
+          <div class="stat"><b id="statChars">–</b><span>ตัวอักษรที่จะส่ง</span></div>
+          <div class="stat"><b id="statSent">–</b><span>ชิ้นที่ส่งได้</span></div>
+        </div>
+
+        <p id="sendNote" class="warn">
+          กดแล้ว <b>ข้อความ</b> ในคลังจะถูกส่งไปที่ doodee-future.com เพื่อวิเคราะห์
+          (รูปไม่ถูกส่ง) — นี่เป็นที่เดียวที่ส่วนขยายส่งข้อมูลออกนอกเครื่อง
+        </p>
+
+        <details class="peek">
+          <summary>ดูข้อความที่จะส่งทั้งหมด</summary>
+          <textarea id="preview" rows="12" readonly></textarea>
+        </details>
+
+        <div class="rowbtns">
+          <button id="runBtn" type="button" class="primary">ส่งไปวิเคราะห์</button>
+          <button id="openVault" type="button" class="ghost">เปิดคลัง</button>
+        </div>
+        <p id="status" class="lead"></p>
+
+        <div id="working" hidden>
+          <div class="bar"><div id="barFill" class="bar-fill is-live"></div></div>
+          <p id="elapsed" class="lead"></p>
+        </div>
+      </section>
+
+      <section id="result" hidden>
+        <div class="card">
+          <div class="resulthead">
+            <h1>ผลวิเคราะห์</h1>
+            <span id="stamp" class="stamp"></span>
+          </div>
+          <p id="overview" class="overview"></p>
+          <div id="groups" class="chips"></div>
+        </div>
+
+        <div id="facultyCard" class="card" hidden>
+          <h2>คณะที่เข้าทาง</h2>
+          <div id="faculties" class="faculties"></div>
+        </div>
+
+        <div class="twocol">
+          <div id="strengthCard" class="card" hidden>
+            <h2>จุดแข็ง</h2>
+            <ul id="strengths" class="bullets good"></ul>
+          </div>
+          <div id="weakCard" class="card" hidden>
+            <h2>จุดที่ควรเพิ่ม</h2>
+            <ul id="weaknesses" class="bullets warn-list"></ul>
+          </div>
+        </div>
+
+        <div id="recCard" class="card" hidden>
+          <h2>ทำต่อได้เลย</h2>
+          <ul id="recommendations" class="bullets"></ul>
+        </div>
+
+        <div id="skillCard" class="card" hidden>
+          <h2>ทักษะที่อ่านได้จากพอร์ต</h2>
+          <div id="skills" class="skills"></div>
+        </div>
+
+        <div id="interestCard" class="card" hidden>
+          <h2>ความสนใจที่ตรวจพบ</h2>
+          <div id="interests" class="chips"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="model.js"></script>
+    <script src="storage.js"></script>
+    <script src="analysis.js"></script>
+    <script src="sitecall.js"></script>
+    <script src="analyse.js"></script>
+  </body>
+</html>

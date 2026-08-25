@@ -1,0 +1,189 @@
+/* ใช้เปลือกเดียวกับหน้านำเข้า/คลัง — ไฟล์นี้มีแค่ส่วนของผลวิเคราะห์ */
+.warn {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-line);
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 14px;
+}
+
+.peek {
+  margin-top: 12px;
+}
+
+.peek summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--blue);
+}
+
+.peek textarea {
+  margin-top: 8px;
+}
+
+.bar-fill.is-live {
+  width: 100%;
+  animation: sweep 1.6s ease-in-out infinite;
+  transform-origin: left;
+}
+
+@keyframes sweep {
+  0% { transform: scaleX(0.05); }
+  50% { transform: scaleX(1); }
+  100% { transform: scaleX(0.05); }
+}
+
+.resulthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.resulthead h1 {
+  margin: 0;
+}
+
+.stamp {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.overview {
+  margin: 12px 0 0;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--blue-soft);
+  font-size: 13px;
+}
+
+.twocol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .twocol { grid-template-columns: 1fr; }
+}
+
+.bullets {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.bullets li {
+  margin: 6px 0;
+}
+
+.bullets.good li::marker { color: #1f7a4d; }
+.bullets.warn-list li::marker { color: var(--warn); }
+
+.faculties {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.faculty {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.faculty-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.faculty-name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.faculty-match {
+  font-variant-numeric: tabular-nums;
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.meter {
+  height: 6px;
+  margin: 8px 0;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+}
+
+.faculty-why {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.faculty-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.tag-have,
+.tag-miss {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.tag-have { background: #eefaf3; border-color: #cbe9d8; }
+.tag-miss { background: var(--pink-soft); border-color: var(--pink-line); color: var(--pink); }
+
+.skills {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skill {
+  display: grid;
+  grid-template-columns: 160px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.skill b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (max-width: 560px) {
+  .skill { grid-template-columns: 110px 1fr 40px; }
+}

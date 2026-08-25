@@ -446,6 +446,10 @@ function openBackupPage() {
   chrome.tabs.create({ url: chrome.runtime.getURL("backup.html") });
 }
 
+el("analyseBtn").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("analyse.html") });
+});
+
 el("importBtn").addEventListener("click", openBackupPage);
 el("welcomeImport").addEventListener("click", openBackupPage);
 

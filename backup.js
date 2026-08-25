@@ -6,10 +6,8 @@
 "use strict";
 
 // คงที่ ไม่ให้แก้จากหน้าเว็บ — โทเคนต้องไม่มีทางถูกส่งไปโฮสต์อื่น
-const ORIGIN = "https://doodee-future.com";
 const API_PATH = "/api/extension/portfolio";
-const API_URL = ORIGIN + API_PATH;
-const SITE_URL = `${ORIGIN}/en/profile/portfolio`;
+const API_URL = SiteCall.ORIGIN + API_PATH;
 const TOKEN_KEY = "syncToken";
 
 const el = (id) => document.getElementById(id);
@@ -106,7 +104,7 @@ el("cancelBtn").addEventListener("click", () => {
 // ── ดึงจากเว็บ ─────────────────────────────────────────────────────
 el("apiUrl").textContent = API_URL;
 
-el("openSite").addEventListener("click", () => chrome.tabs.create({ url: SITE_URL }));
+el("openSite").addEventListener("click", () => chrome.tabs.create({ url: SiteCall.SITE_URL }));
 
 el("tokenToggle").addEventListener("click", () => {
   el("tokenBox").hidden = !el("tokenBox").hidden;
@@ -132,50 +130,6 @@ async function loadToken() {
   }
 }
 
-// แปล HTTP status เป็นสิ่งที่ทำต่อได้ ไม่ใช่เลขดิบ
-function explain(status) {
-  if (status === 401 || status === 403) {
-    return "เว็บบอกว่ายังไม่ได้ล็อกอิน — เปิดหน้าพอร์ตในเว็บแล้วล็อกอินก่อน ค่อยกดดึงอีกที";
-  }
-  if (status === 404) return "เว็บยังไม่มี endpoint นี้ — ดูสเปกที่ docs/web-api-contract.md";
-  if (status >= 500) return `เว็บมีปัญหาฝั่งเซิร์ฟเวอร์ (${status}) ลองใหม่อีกที`;
-  return `เว็บตอบ ${status}`;
-}
-
-// ดึงผ่านแท็บของเว็บ: content script ที่นั่นเป็น same-origin คุกกี้เซสชันจึงถูกส่งไปด้วย
-// ยิงตรงจากหน้านี้ไม่ได้ คำขอจาก chrome-extension:// เป็น cross-site คุกกี้ SameSite=Lax หายหมด
-async function pullViaSiteTab() {
-  const open = await chrome.tabs.query({ url: `${ORIGIN}/*` });
-  let tab = open[0];
-  const opened = !tab;
-  if (opened) {
-    tab = await chrome.tabs.create({ url: SITE_URL, active: false });
-    for (let i = 0; i < 40; i += 1) {
-      const now = await chrome.tabs.get(tab.id).catch(() => null);
-      if (!now) throw new Error("แท็บเว็บถูกปิดไปก่อน");
-      if (now.status === "complete") break;
-      await new Promise((done) => setTimeout(done, 500));
-    }
-  }
-
-  try {
-    // content script อาจยังไม่ทันฝังตัวในแท็บที่เพิ่งเปิด ลองซ้ำสองสามที
-    let last;
-    for (let i = 0; i < 6; i += 1) {
-      try {
-        return await chrome.tabs.sendMessage(tab.id, { tag: "doodee-pull", path: API_PATH });
-      } catch (error) {
-        last = error;
-        await new Promise((done) => setTimeout(done, 700));
-      }
-    }
-    throw new Error(
-      `คุยกับแท็บ doodee-future ไม่ได้ — ลองโหลดส่วนขยายใหม่แล้วรีเฟรชหน้าเว็บ (${last && last.message})`,
-    );
-  } finally {
-    if (opened) await chrome.tabs.remove(tab.id).catch(() => {});
-  }
-}
 
 // มีโทเคน = ยิงตรงได้เลย ไม่ต้องพึ่งคุกกี้ (เผื่อวันหนึ่งเว็บออก API key ให้)
 async function pullDirect(token) {
@@ -198,14 +152,10 @@ el("pullBtn").addEventListener("click", async () => {
   try {
     const token = el("token").value.trim();
     note.textContent = token ? "กำลังดึงจากเว็บ (ใช้โทเคน)…" : "กำลังดึงจากเว็บผ่านแท็บที่ล็อกอินอยู่…";
-    const res = token ? await pullDirect(token) : await pullViaSiteTab();
+    const res = token ? await pullDirect(token) : await SiteCall.request(API_PATH);
 
-    if (!res) throw new Error("แท็บเว็บไม่ตอบกลับ");
-    if (!res.ok && res.status === 0) throw new Error(`ยิงจากแท็บเว็บไม่สำเร็จ (${res.why || "ไม่ทราบสาเหตุ"})`);
-    if (!res.ok) throw new Error(explain(res.status));
-
-    // ล็อกอินหมดอายุมักได้หน้า HTML กลับมาพร้อม 200 ไม่ใช่ 401
-    if (/^\s*</.test(res.text)) {
+    if (!res.ok) throw new Error(SiteCall.explain(res.status));
+    if (SiteCall.looksLikeHtml(res.text)) {
       throw new Error("เว็บส่ง HTML กลับมาแทน JSON — น่าจะเด้งไปหน้าล็อกอิน ลองล็อกอินใหม่");
     }
 
