@@ -130,13 +130,37 @@
     return out.sort();
   }
 
-  function toExport(items, now) {
-    return {
+  // รับรูปเข้ามาด้วยได้ เพื่อให้ไฟล์ที่ส่งออกเป็น backup ที่กู้กลับได้จริง
+  // (ก่อนหน้านี้ส่งออกแต่ข้อความ พอคลังหายก็ต้องไล่แนบรูปใหม่ทั้งหมด)
+  // ไม่ส่ง images เข้ามา = ไฟล์หน้าตาเหมือนเดิมเป๊ะ ของเก่ายังอ่านได้
+  function toExport(items, now, images) {
+    const out = {
       app: "doodee-future",
       version: EXPORT_VERSION,
       exportedAt: Number.isFinite(now) ? now : Date.now(),
       items,
     };
+    if (!images) return out;
+
+    const ids = new Set(items.map((entry) => entry.id));
+    const packed = {};
+    for (const [id, list] of Object.entries(images)) {
+      if (!ids.has(id)) continue; // รูปของผลงานที่ไม่ได้ส่งออก = ขยะ ไม่ต้องพก
+      const clean = (Array.isArray(list) ? list : []).filter(isImage);
+      if (clean.length) packed[id] = clean;
+    }
+    out.images = packed;
+    return out;
+  }
+
+  // รับเฉพาะ data URL ของภาพ — ไฟล์ backup แก้มือได้ และรูปจะถูกเอาไปยัดใส่ src
+  // ปล่อยให้ javascript: หรือ svg ที่มีสคริปต์หลุดเข้ามาไม่ได้
+  function isImage(img) {
+    return !!(
+      img &&
+      typeof img.data === "string" &&
+      /^data:image\/(jpeg|jpg|png|webp|gif);base64,/i.test(img.data)
+    );
   }
 
   // รับได้ทั้งไฟล์ที่เราส่งออกเอง และ array เปล่า ๆ ที่แก้มือมา
@@ -156,7 +180,14 @@
     const items = normalize(raw).items;
     // ไฟล์ที่ไม่มีผลงานเลยต้องไม่ขึ้นว่าสำเร็จ ผู้ใช้เลือกไฟล์ผิดจะได้รู้
     if (!items.length) throw new Error("ไฟล์นี้ไม่มีผลงานอยู่เลย");
-    return items;
+
+    const images = {};
+    const rawImages = data && typeof data.images === "object" && data.images ? data.images : {};
+    for (const [id, list] of Object.entries(rawImages)) {
+      const clean = (Array.isArray(list) ? list : []).filter(isImage);
+      if (clean.length) images[id] = clean;
+    }
+    return { items, images };
   }
 
   // upsert เท่านั้น ห้ามแทนที่ทั้งก้อน
@@ -196,6 +227,7 @@
     filterItems,
     allTags,
     toExport,
+    isImage,
     parseImport,
     mergeImport,
   };

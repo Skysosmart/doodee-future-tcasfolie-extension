@@ -116,8 +116,8 @@ test("export wraps items with app, version, and timestamp", () => {
 test("parseImport accepts our wrapper and a bare array", () => {
   const items = [M.makeItem({ title: "A" }, { id: "1", now: 5 })];
 
-  assert.deepEqual(M.parseImport(JSON.stringify(M.toExport(items, 42))), items);
-  assert.deepEqual(M.parseImport(JSON.stringify(items)), items);
+  assert.deepEqual(M.parseImport(JSON.stringify(M.toExport(items, 42))).items, items);
+  assert.deepEqual(M.parseImport(JSON.stringify(items)).items, items);
 });
 
 test("parseImport rejects broken files with a readable Thai message", () => {
@@ -172,7 +172,7 @@ test("parseImport refuses a file that carries no items", () => {
     /ไม่มีผลงาน/,
   );
   // ของที่มีจริงต้องยังผ่านเหมือนเดิม
-  assert.equal(M.parseImport(JSON.stringify([{ title: "ยังอ่านได้" }])).length, 1);
+  assert.equal(M.parseImport(JSON.stringify([{ title: "ยังอ่านได้" }])).items.length, 1);
 });
 
 test("ฟิลด์ใหม่ ระดับ/ผลรางวัล/ชั่วโมง ถูกเก็บและกรองค่าที่ใช้ไม่ได้ทิ้ง", () => {
@@ -211,4 +211,70 @@ test("filterItems matches every search word across title, org, detail and tags",
   assert.equal(Model.filterItems(items, { q: "ctf" }).length, 1, "ค้นจากแท็กได้");
   assert.equal(Model.filterItems(items, { q: "  " }).length, 2, "ช่องว่างล้วนคือไม่กรอง");
   assert.equal(Model.filterItems(items, { q: "security", type: "รางวัล / เกียรติบัตร" }).length, 0, "ต้องทำงานร่วมกับตัวกรองหมวด");
+});
+
+test("toExport ใส่รูปลงไฟล์ได้ และไฟล์ที่ไม่มีรูปยังหน้าตาเดิม", () => {
+  const items = M.normalize([{ type: "กิจกรรม", title: "ก" }]).items;
+  const id = items[0].id;
+
+  const plain = M.toExport(items, 1000);
+  assert.equal(plain.images, undefined, "ไม่ส่งรูปมา = ไฟล์ต้องไม่มีคีย์ images");
+
+  const withImages = M.toExport(items, 1000, {
+    [id]: [{ name: "a.jpg", type: "image/jpeg", data: "data:image/jpeg;base64,AAA" }],
+  });
+  assert.equal(withImages.images[id].length, 1);
+  assert.equal(withImages.items.length, 1);
+});
+
+test("toExport ทิ้งรูปของผลงานที่ไม่ได้ส่งออก และทิ้งรูปที่ไม่มีข้อมูล", () => {
+  const items = M.normalize([{ type: "กิจกรรม", title: "ก" }]).items;
+  const id = items[0].id;
+  const out = M.toExport(items, 1000, {
+    [id]: [
+      { name: "ok.jpg", type: "image/jpeg", data: "data:image/jpeg;base64,AAA" },
+      { name: "เสีย.jpg", type: "image/jpeg" }, // ไม่มี data
+    ],
+    "ผลงานที่ถูกลบไปแล้ว": [{ name: "x.jpg", data: "data:image/jpeg;base64,BBB" }],
+  });
+  assert.deepEqual(Object.keys(out.images), [id]);
+  assert.equal(out.images[id].length, 1);
+});
+
+test("parseImport อ่านรูปจากไฟล์ที่มี และคืน images ว่างเมื่อไฟล์เก่าไม่มีรูป", () => {
+  const items = M.normalize([{ type: "กิจกรรม", title: "ก" }]).items;
+  const id = items[0].id;
+
+  const withImages = M.parseImport(
+    JSON.stringify(M.toExport(items, 1000, { [id]: [{ name: "a.jpg", type: "image/jpeg", data: "data:image/jpeg;base64,AAA" }] })),
+  );
+  assert.equal(withImages.items.length, 1);
+  assert.equal(withImages.images[id].length, 1);
+
+  const legacy = M.parseImport(JSON.stringify(M.toExport(items, 1000)));
+  assert.equal(legacy.items.length, 1);
+  assert.deepEqual(legacy.images, {}, "ไฟล์เก่าที่ไม่มีรูปต้องไม่พัง");
+
+  const bareArray = M.parseImport(JSON.stringify(items));
+  assert.equal(bareArray.items.length, 1, "array เปล่า ๆ ที่แก้มือยังต้องนำเข้าได้");
+});
+
+test("parseImport ไม่ยอมรับรูปที่ไม่ใช่ data URL ของภาพ", () => {
+  const items = M.normalize([{ type: "กิจกรรม", title: "ก" }]).items;
+  const id = items[0].id;
+  const out = M.parseImport(
+    JSON.stringify({
+      app: "doodee-future",
+      items,
+      images: {
+        [id]: [
+          { name: "ดี.jpg", type: "image/jpeg", data: "data:image/jpeg;base64,AAA" },
+          { name: "อันตราย.svg", type: "image/svg+xml", data: "javascript:alert(1)" },
+          { name: "ไม่มีข้อมูล.jpg", type: "image/jpeg" },
+        ],
+      },
+    }),
+  );
+  assert.equal(out.images[id].length, 1);
+  assert.equal(out.images[id][0].name, "ดี.jpg");
 });

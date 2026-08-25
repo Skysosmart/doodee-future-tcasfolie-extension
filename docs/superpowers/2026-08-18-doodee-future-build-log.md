@@ -436,3 +436,22 @@ Three findings worth repeating here:
 Known and accepted: images are over-collected (114 from a 10-page book) because Canva slices
 one picture into several XObjects. Nothing is saved without an explicit click, so this is
 clutter, not data loss. Next thing to try is grouping fingerprints by hamming distance.
+
+Ruling 25 — export/import now carry the images (2026-08-25). The vault was lost twice in one
+session because the test profile lived under `/tmp` and `/tmp` was cleared. Both times the
+JSON backup restored the text and nothing else, so every certificate had to be re-attached by
+hand from the source folders. A backup that cannot restore what was lost is not a backup.
+
+`toExport(items, now, images)` takes an optional image map and drops anything whose entry is
+not being exported; `parseImport` returns `{ items, images }` and only accepts
+`data:image/...;base64,` payloads — a hand-edited backup must not be able to smuggle a
+`javascript:` or scripted-SVG URL into an `img src`. Files written before this change still
+import: no `images` key simply yields `{}`.
+
+Two details that matter on restore. `mergeImport` hands a fresh id to entries whose ids
+collide inside the file, so the images are re-keyed by matching title + createdAt, which do
+not change. And an entry that already has images is left alone — restoring a backup must never
+overwrite pictures the owner attached since.
+
+Verified against the real 11.2 MB backup: 82 entries, 46 images, every image group resolving
+to an entry that exists. 61 tests.

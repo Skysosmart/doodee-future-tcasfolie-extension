@@ -399,7 +399,22 @@ el("imageFile").addEventListener("change", async (event) => {
 el("exportBtn").addEventListener("click", async () => {
   try {
     const items = await Storage.getItems();
-    const text = JSON.stringify(Model.toExport(items, Date.now()), null, 2);
+    // เก็บรูปไปด้วย ไฟล์จะใหญ่ขึ้นมาก แต่นี่คือ backup — ถ้าไม่มีรูป กู้กลับมาก็ยังต้อง
+    // ไล่แนบใหม่ทั้งหมด (เกิดขึ้นจริงมาแล้ว) ยอมแลกขนาดไฟล์
+    const images = {};
+    let imageCount = 0;
+    for (const item of items) {
+      try {
+        const list = await Storage.getImages(item.id);
+        if (list.length) {
+          images[item.id] = list;
+          imageCount += list.length;
+        }
+      } catch (error) {
+        // รูปชิ้นเดียวอ่านไม่ได้ ต้องไม่ทำให้ backup ทั้งก้อนล่ม — ข้ามไป
+      }
+    }
+    const text = JSON.stringify(Model.toExport(items, Date.now(), images));
     const blob = new Blob([text], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
@@ -410,7 +425,8 @@ el("exportBtn").addEventListener("click", async () => {
 
     // ปล่อยทิ้งหลังดาวน์โหลดเริ่มแล้ว
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    showStatus(`ส่งออก ${items.length} รายการแล้ว`);
+    const mb = (text.length / 1048576).toFixed(1);
+    showStatus(`ส่งออก ${items.length} รายการ · รูป ${imageCount} ใบ · ${mb} MB`);
   } catch (error) {
     // นี่คือทางสำรองข้อมูล ถ้ามันเงียบ ผู้ใช้จะเชื่อว่า backup แล้วทั้งที่ไม่มีไฟล์
     showStatus(`ส่งออกไม่สำเร็จ: ${error.message}`, true);
@@ -431,22 +447,48 @@ el("importFile").addEventListener("change", async (event) => {
   if (!file) return;
 
   try {
-    const incoming = Model.parseImport(await file.text());
+    const parsed = Model.parseImport(await file.text());
     let added = 0;
     let updated = 0;
     let redone = 0;
+    let keptIds = new Map();
     // ผ่านคิวเดียวกับ save/delete กันเขียนชนกัน
     const ok = await mutate((items) => {
       // รวมแบบ upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ backup ต้องไม่หาย
-      const result = Model.mergeImport(items, incoming);
+      const result = Model.mergeImport(items, parsed.items);
       added = result.added;
       updated = result.updated;
       redone = result.redone;
+      // mergeImport แจก id ใหม่ให้ชิ้นที่ id ซ้ำกันเองในไฟล์ — ต้องตามให้รูปไปถูกชิ้น
+      // จับคู่ด้วยหัวข้อ+วันที่สร้าง ซึ่งไม่เปลี่ยนตอนแจก id ใหม่
+      keptIds = new Map(
+        parsed.items.map((entry) => {
+          const match = result.items.find(
+            (saved) => saved.title === entry.title && saved.createdAt === entry.createdAt,
+          );
+          return [entry.id, match ? match.id : entry.id];
+        }),
+      );
       return result.items;
     });
+
+    let restored = 0;
     if (ok) {
+      for (const [oldId, list] of Object.entries(parsed.images)) {
+        const id = keptIds.get(oldId) || oldId;
+        try {
+          const existing = await Storage.getImages(id);
+          if (existing.length) continue; // มีรูปอยู่แล้ว ห้ามทับของที่ผู้ใช้แนบเอง
+          await Storage.setImages(id, list);
+          restored += list.length;
+        } catch (error) {
+          // รูปชิ้นเดียวเขียนไม่ได้ ต้องไม่ทำให้ที่นำเข้าไปแล้วเสียเปล่า
+        }
+      }
+
       const extra = redone ? ` · id ซ้ำในไฟล์ ${redone} (แยกเป็นคนละชิ้นให้แล้ว)` : "";
-      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}${extra}`);
+      const pics = restored ? ` · รูป ${restored} ใบ` : "";
+      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}${pics}${extra}`);
       render();
     }
   } catch (error) {
