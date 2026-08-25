@@ -439,64 +439,14 @@ el("pdfBtn").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
 });
 
-el("importBtn").addEventListener("click", () => el("importFile").click());
-el("welcomeImport").addEventListener("click", () => el("importFile").click());
+// หน้าสำรอง/กู้คืนเป็นแท็บของตัวเอง ไม่ทำใน popup — popup ปิดตัวเองตอน file dialog เปิด
+// change เลยไม่เคยยิง ไฟล์ที่เลือกหายเงียบ ๆ (เจอจริง: กู้ backup แล้วคลังยังว่าง)
+function openBackupPage() {
+  chrome.tabs.create({ url: chrome.runtime.getURL("backup.html") });
+}
 
-el("importFile").addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  try {
-    const parsed = Model.parseImport(await file.text());
-    let added = 0;
-    let updated = 0;
-    let redone = 0;
-    let keptIds = new Map();
-    // ผ่านคิวเดียวกับ save/delete กันเขียนชนกัน
-    const ok = await mutate((items) => {
-      // รวมแบบ upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ backup ต้องไม่หาย
-      const result = Model.mergeImport(items, parsed.items);
-      added = result.added;
-      updated = result.updated;
-      redone = result.redone;
-      // mergeImport แจก id ใหม่ให้ชิ้นที่ id ซ้ำกันเองในไฟล์ — ต้องตามให้รูปไปถูกชิ้น
-      // จับคู่ด้วยหัวข้อ+วันที่สร้าง ซึ่งไม่เปลี่ยนตอนแจก id ใหม่
-      keptIds = new Map(
-        parsed.items.map((entry) => {
-          const match = result.items.find(
-            (saved) => saved.title === entry.title && saved.createdAt === entry.createdAt,
-          );
-          return [entry.id, match ? match.id : entry.id];
-        }),
-      );
-      return result.items;
-    });
-
-    let restored = 0;
-    if (ok) {
-      for (const [oldId, list] of Object.entries(parsed.images)) {
-        const id = keptIds.get(oldId) || oldId;
-        try {
-          const existing = await Storage.getImages(id);
-          if (existing.length) continue; // มีรูปอยู่แล้ว ห้ามทับของที่ผู้ใช้แนบเอง
-          await Storage.setImages(id, list);
-          restored += list.length;
-        } catch (error) {
-          // รูปชิ้นเดียวเขียนไม่ได้ ต้องไม่ทำให้ที่นำเข้าไปแล้วเสียเปล่า
-        }
-      }
-
-      const extra = redone ? ` · id ซ้ำในไฟล์ ${redone} (แยกเป็นคนละชิ้นให้แล้ว)` : "";
-      const pics = restored ? ` · รูป ${restored} ใบ` : "";
-      showStatus(`นำเข้าแล้ว: เพิ่ม ${added} · อัปเดต ${updated}${pics}${extra}`);
-      render();
-    }
-  } catch (error) {
-    showStatus(error.message, true);
-  } finally {
-    event.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
-  }
-});
+el("importBtn").addEventListener("click", openBackupPage);
+el("welcomeImport").addEventListener("click", openBackupPage);
 
 fillTypeOptions();
 fillLevelOptions();

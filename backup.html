@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <title>สำรองและกู้คืนคลัง — Doodee future</title>
+    <link rel="stylesheet" href="import.css" />
+    <link rel="stylesheet" href="backup.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <span class="brand">Doodee</span>
+      <span class="crumb">สำรองและกู้คืนคลัง</span>
+    </header>
+
+    <main class="wrap">
+      <section class="card">
+        <h1>คลังตอนนี้</h1>
+        <div id="stats" class="stats">
+          <div class="stat"><b id="statItems">–</b><span>ผลงาน</span></div>
+          <div class="stat"><b id="statImages">–</b><span>รูป</span></div>
+          <div class="stat"><b id="statSize">–</b><span>พื้นที่ที่ใช้</span></div>
+        </div>
+        <p id="statsNote" class="lead"></p>
+        <button id="refreshBtn" type="button" class="ghost">ตรวจอีกครั้ง</button>
+      </section>
+
+      <section class="card">
+        <h1>สำรองไว้</h1>
+        <p class="lead">
+          ได้ไฟล์เดียวจบ ทั้งข้อความและรูป เก็บไว้นอกโฟลเดอร์ชั่วคราว
+          (อย่าไว้ใน <code>/tmp</code> — ระบบล้างเมื่อไหร่ก็ได้)
+        </p>
+        <button id="exportBtn" type="button" class="primary">ส่งออกไฟล์สำรอง</button>
+        <p id="exportNote" class="lead" hidden></p>
+      </section>
+
+      <section class="card">
+        <h1>กู้คืนจากไฟล์</h1>
+        <p class="lead">
+          เติมของที่หายกลับเข้าคลัง ไม่ลบของที่มีอยู่
+          และไม่ทับรูปของชิ้นที่แนบไว้แล้ว
+        </p>
+
+        <label id="drop" class="drop" for="file">
+          <input id="file" type="file" accept="application/json,.json" hidden />
+          <span class="drop-title">ลากไฟล์ .json มาวาง</span>
+          <span class="drop-sub">หรือคลิกเพื่อเลือกไฟล์</span>
+        </label>
+
+        <p id="pickError" class="error" hidden></p>
+
+        <div id="preview" hidden>
+          <h2>ในไฟล์นี้มี</h2>
+          <div class="stats">
+            <div class="stat"><b id="fileItems">–</b><span>ผลงาน</span></div>
+            <div class="stat"><b id="fileImages">–</b><span>รูป</span></div>
+            <div class="stat"><b id="fileSize">–</b><span>ขนาดไฟล์</span></div>
+          </div>
+          <p id="fileNote" class="lead"></p>
+          <div class="rowbtns">
+            <button id="restoreBtn" type="button" class="primary">กู้คืนเข้าคลัง</button>
+            <button id="cancelBtn" type="button" class="ghost">เลือกไฟล์อื่น</button>
+          </div>
+        </div>
+
+        <div id="working" hidden>
+          <p id="workingText" class="lead">กำลังเขียนลงคลัง…</p>
+          <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+        </div>
+
+        <div id="result" class="result" hidden>
+          <h2 id="resultHead"></h2>
+          <p id="resultLead" class="lead"></p>
+          <p id="resultCheck" class="lead"></p>
+        </div>
+
+        <p class="privacy">ไฟล์อ่านในเครื่องเท่านั้น ไม่ถูกอัปโหลดไปที่ไหน</p>
+      </section>
+    </main>
+
+    <script src="model.js"></script>
+    <script src="storage.js"></script>
+    <script src="backup.js"></script>
+  </body>
+</html>

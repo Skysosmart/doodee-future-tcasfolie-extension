@@ -1,0 +1,60 @@
+/* ใช้เปลือกเดียวกับหน้านำเข้า PDF (import.css) — ไฟล์นี้มีแค่ส่วนที่หน้านั้นไม่มี */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0 10px;
+}
+
+.stat {
+  flex: 1 1 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--blue-soft);
+}
+
+.stat b {
+  display: block;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--blue);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat span {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rowbtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.result {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 10px;
+  background: var(--blue-soft);
+}
+
+.result h2 {
+  margin-top: 0;
+}
+
+.result.is-bad {
+  border-left-color: var(--pink);
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--blue-soft);
+  border: 1px solid var(--line);
+  font-size: 0.92em;
+}
