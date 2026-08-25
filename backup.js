@@ -1,9 +1,14 @@
-// หน้าสำรอง/กู้คืนคลัง — เป็นแท็บของตัวเอง ไม่ทำใน popup
+// หน้าคลัง — ซิงก์จากเว็บ / สำรอง / กู้คืน เป็นแท็บของตัวเอง ไม่ทำใน popup
 //
 // popup ปิดตัวเองทันทีที่ file dialog ของระบบเปิดขึ้น หน้าถูกทำลายก่อน change จะยิง
 // ไฟล์ที่เลือกจึงหายเงียบ ๆ ไม่มี error ให้เห็น (เกิดจริง: กู้คืน backup แล้วคลังยังว่าง
-// ทั้งที่กดครบทุกขั้น) แท็บไม่มีปัญหานี้ และการเขียนรูปหลายสิบ MB ก็ใช้เวลาเกินอายุ popup อยู่แล้ว
+// ทั้งที่กดครบทุกขั้น) และการดึงจากเว็บ + เขียนรูปหลายสิบ MB ก็ใช้เวลาเกินอายุ popup อยู่แล้ว
 "use strict";
+
+// คงที่ ไม่ให้แก้จากหน้าเว็บ — โทเคนต้องไม่มีทางถูกส่งไปโฮสต์อื่น
+const API_URL = "https://doodee-future.com/api/extension/portfolio";
+const SITE_URL = "https://doodee-future.com/en/profile/portfolio";
+const TOKEN_KEY = "syncToken";
 
 const el = (id) => document.getElementById(id);
 
@@ -24,20 +29,15 @@ async function refreshVault() {
     el("statItems").textContent = items.length;
     el("statImages").textContent = images;
 
-    // ขนาดจริงที่กินอยู่ ไม่ใช่ค่าประมาณ — ผู้ใช้เพิ่งเสียคลังไปสองรอบ ต้องเห็นของจริง
-    let used = 0;
+    // ขนาดจริงที่กินอยู่ ไม่ใช่ค่าประมาณ — เจ้าของเพิ่งเสียคลังไปสองรอบ ต้องเห็นของจริง
     try {
-      used = await chrome.storage.local.getBytesInUse(null);
-      el("statSize").textContent = fmtBytes(used);
+      el("statSize").textContent = fmtBytes(await chrome.storage.local.getBytesInUse(null));
     } catch (error) {
       el("statSize").textContent = "–";
     }
 
-    if (!items.length) {
-      el("statsNote").textContent = "คลังยังว่าง — กู้คืนจากไฟล์สำรองด้านล่างได้เลย";
-    } else if (!images) {
-      el("statsNote").textContent = "มีผลงานแล้วแต่ยังไม่มีรูปสักใบ";
-    }
+    if (!items.length) el("statsNote").textContent = "คลังยังว่าง — ดึงจากเว็บหรือกู้คืนจากไฟล์ได้เลย";
+    else if (!images) el("statsNote").textContent = "มีผลงานแล้วแต่ยังไม่มีรูปสักใบ";
     return { items: items.length, images };
   } catch (error) {
     el("statsNote").textContent = `อ่านคลังไม่ได้: ${error.message}`;
@@ -47,102 +47,162 @@ async function refreshVault() {
 
 el("refreshBtn").addEventListener("click", refreshVault);
 
-// ── ส่งออก ─────────────────────────────────────────────────────────
-el("exportBtn").addEventListener("click", async () => {
-  const note = el("exportNote");
-  note.hidden = false;
-  note.textContent = "กำลังรวมไฟล์…";
+// ── ตรวจก่อนเข้าคลัง (ใช้ร่วมกันทั้งดึงจากเว็บและเปิดไฟล์) ─────────────
+let staged = null;
+
+function clearStage() {
+  staged = null;
+  el("stage").hidden = true;
+  el("working").hidden = true;
+  el("fileWarn").hidden = true;
+  el("file").value = "";
+}
+
+// นับรูปดิบก่อน parseImport กรอง — ถ้าเว็บส่งลิงก์รูปแทน base64 มันจะถูกทิ้งเงียบ ๆ
+// แล้วผู้ใช้จะเชื่อว่าได้รูปครบ ต้องบอกว่าหายไปกี่ใบและเพราะอะไร
+function countRawImages(text) {
   try {
-    const items = await Storage.getItems();
-    const images = {};
-    let imageCount = 0;
-    for (const item of items) {
-      try {
-        const list = await Storage.getImages(item.id);
-        if (list.length) {
-          images[item.id] = list;
-          imageCount += list.length;
-        }
-      } catch (error) {
-        // รูปชิ้นเดียวอ่านไม่ได้ ต้องไม่ทำให้ backup ทั้งก้อนล่ม
-      }
+    const raw = JSON.parse(text);
+    const groups = raw && typeof raw.images === "object" && raw.images ? raw.images : {};
+    return Object.values(groups).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
+  } catch (error) {
+    return 0;
+  }
+}
+
+function stageJson(text, source) {
+  const parsed = Model.parseImport(text); // โยน error ออกไปให้ผู้เรียกแสดงตามบริบท
+  const kept = Object.values(parsed.images).reduce((sum, list) => sum + list.length, 0);
+  const dropped = countRawImages(text) - kept;
+
+  staged = { parsed, source };
+  el("fileItems").textContent = parsed.items.length;
+  el("fileImages").textContent = kept;
+  el("fileSize").textContent = fmtBytes(text.length);
+  el("fileNote").textContent = kept
+    ? `${source} — กดบันทึกแล้วรออีกสักครู่ ระหว่างเขียนรูปห้ามปิดแท็บนี้`
+    : `${source} — ชุดนี้ไม่มีรูปติดมา จะได้แต่ข้อความ`;
+
+  const warn = el("fileWarn");
+  warn.hidden = dropped <= 0;
+  if (dropped > 0) {
+    warn.textContent =
+      `รูป ${dropped} ใบใช้ไม่ได้ ถูกตัดทิ้ง — รับเฉพาะ data:image/...;base64 ` +
+      `ถ้าเว็บส่งมาเป็นลิงก์ ต้องแปลงเป็น base64 ก่อนส่ง`;
+  }
+
+  el("result").hidden = true;
+  el("stage").hidden = false;
+  el("stage").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+el("cancelBtn").addEventListener("click", () => {
+  el("pickError").hidden = true;
+  clearStage();
+});
+
+// ── ดึงจากเว็บ ─────────────────────────────────────────────────────
+el("apiUrl").textContent = API_URL;
+
+el("openSite").addEventListener("click", () => chrome.tabs.create({ url: SITE_URL }));
+
+el("tokenToggle").addEventListener("click", () => {
+  el("tokenBox").hidden = !el("tokenBox").hidden;
+});
+
+el("tokenSave").addEventListener("click", async () => {
+  const value = el("token").value.trim();
+  await chrome.storage.local.set({ [TOKEN_KEY]: value });
+  el("pullNote").textContent = value ? "จำโทเคนไว้แล้ว" : "ลบโทเคนแล้ว";
+});
+
+el("tokenClear").addEventListener("click", async () => {
+  el("token").value = "";
+  await chrome.storage.local.remove(TOKEN_KEY);
+  el("pullNote").textContent = "ลบโทเคนแล้ว";
+});
+
+async function loadToken() {
+  const data = await chrome.storage.local.get(TOKEN_KEY);
+  if (data[TOKEN_KEY]) {
+    el("token").value = data[TOKEN_KEY];
+    el("tokenBox").hidden = false;
+  }
+}
+
+// แปล HTTP status เป็นสิ่งที่ทำต่อได้ ไม่ใช่เลขดิบ
+function explain(status) {
+  if (status === 401 || status === 403) {
+    return (
+      "เว็บบอกว่ายังไม่ได้ล็อกอิน — ถ้าล็อกอินอยู่แล้ว แปลว่าคุกกี้ส่งข้ามมาไม่ได้ " +
+      "(SameSite) ให้กด ใช้โทเคน แล้ววางโทเคนจากหน้าโปรไฟล์"
+    );
+  }
+  if (status === 404) return "เว็บยังไม่มี endpoint นี้ — ดูสเปกที่ docs/web-api-contract.md";
+  if (status >= 500) return `เว็บมีปัญหาฝั่งเซิร์ฟเวอร์ (${status}) ลองใหม่อีกที`;
+  return `เว็บตอบ ${status}`;
+}
+
+el("pullBtn").addEventListener("click", async () => {
+  const note = el("pullNote");
+  const btn = el("pullBtn");
+  btn.disabled = true;
+  note.textContent = "กำลังดึงจากเว็บ…";
+  el("pickError").hidden = true;
+
+  try {
+    const token = el("token").value.trim();
+    const headers = { accept: "application/json" };
+    if (token) headers.authorization = `Bearer ${token}`;
+
+    let res;
+    try {
+      res = await fetch(API_URL, { credentials: "include", headers, cache: "no-store" });
+    } catch (error) {
+      throw new Error(`ต่อเว็บไม่ได้ — เช็กเน็ตหรือเว็บล่มอยู่ (${error.message})`);
+    }
+    if (!res.ok) throw new Error(explain(res.status));
+
+    const text = await res.text();
+    // ล็อกอินหมดอายุมักได้หน้า HTML กลับมาพร้อม 200 ไม่ใช่ 401
+    if (/^\s*</.test(text)) {
+      throw new Error("เว็บส่ง HTML กลับมาแทน JSON — น่าจะเด้งไปหน้าล็อกอิน ลองล็อกอินใหม่");
     }
 
-    const text = JSON.stringify(Model.toExport(items, Date.now(), images));
-    const blob = new Blob([text], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `doodee-future-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-
-    note.textContent = `ส่งออกแล้ว ${items.length} ผลงาน · รูป ${imageCount} ใบ · ${fmtBytes(text.length)}`;
+    stageJson(text, "ดึงจากเว็บ doodee-future");
+    note.textContent = `ดึงมาแล้ว ${fmtBytes(text.length)} — ตรวจแล้วกดบันทึกเข้าคลังด้านล่าง`;
   } catch (error) {
-    note.textContent = `ส่งออกไม่สำเร็จ: ${error.message}`;
+    note.textContent = error.message;
+    clearStage();
+  } finally {
+    btn.disabled = false;
   }
 });
 
-// ── กู้คืน ─────────────────────────────────────────────────────────
-let staged = null;
-
-function clearPreview() {
-  staged = null;
-  el("preview").hidden = true;
-  el("result").hidden = true;
-  el("working").hidden = true;
-  el("file").value = "";
+// ── เปิดไฟล์ ───────────────────────────────────────────────────────
+async function readFile(file) {
+  el("pickError").hidden = true;
+  el("pullNote").textContent = "";
+  if (!file) return;
+  if (!/\.json$/i.test(file.name) && file.type !== "application/json") {
+    fail("ไฟล์นี้ไม่ใช่ .json — เลือกไฟล์ที่ได้จากปุ่ม ส่งออกไฟล์สำรอง");
+    return;
+  }
+  try {
+    stageJson(await file.text(), file.name);
+  } catch (error) {
+    fail(error.message);
+  }
 }
 
 function fail(message) {
   const box = el("pickError");
   box.textContent = message;
   box.hidden = false;
-  clearPreview();
-}
-
-async function readFile(file) {
-  el("pickError").hidden = true;
-  el("result").hidden = true;
-  if (!file) return;
-  if (!/\.json$/i.test(file.name) && file.type !== "application/json") {
-    fail("ไฟล์นี้ไม่ใช่ .json — เลือกไฟล์ที่ได้จากปุ่ม ส่งออกไฟล์สำรอง");
-    return;
-  }
-
-  let text;
-  try {
-    text = await file.text();
-  } catch (error) {
-    fail(`เปิดไฟล์ไม่ได้: ${error.message}`);
-    return;
-  }
-
-  let parsed;
-  try {
-    parsed = Model.parseImport(text);
-  } catch (error) {
-    fail(error.message);
-    return;
-  }
-
-  const images = Object.values(parsed.images).reduce((sum, list) => sum + list.length, 0);
-  staged = { parsed, name: file.name };
-
-  el("fileItems").textContent = parsed.items.length;
-  el("fileImages").textContent = images;
-  el("fileSize").textContent = fmtBytes(text.length);
-  el("fileNote").textContent = images
-    ? `${file.name} — กดกู้คืนแล้วรออีกสักครู่ ระหว่างเขียนรูปห้ามปิดแท็บนี้`
-    : `${file.name} — ไฟล์นี้ไม่มีรูปติดมา จะได้แต่ข้อความ`;
-  el("preview").hidden = false;
+  clearStage();
 }
 
 el("file").addEventListener("change", (event) => readFile(event.target.files[0]));
-el("cancelBtn").addEventListener("click", () => {
-  el("pickError").hidden = true;
-  clearPreview();
-});
 
 const drop = el("drop");
 ["dragenter", "dragover"].forEach((name) =>
@@ -159,6 +219,7 @@ drop.addEventListener("drop", (event) => {
   readFile(event.dataTransfer.files[0]);
 });
 
+// ── เขียนลงคลัง ────────────────────────────────────────────────────
 function progress(done, total, label) {
   el("barFill").style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
   el("workingText").textContent = label;
@@ -168,17 +229,17 @@ el("restoreBtn").addEventListener("click", async () => {
   if (!staged) return;
   const { parsed } = staged;
 
-  el("preview").hidden = true;
+  el("restoreBtn").disabled = true;
   el("working").hidden = false;
   progress(0, 1, "กำลังเขียนผลงานลงคลัง…");
 
   try {
     const items = await Storage.getItems();
-    // upsert — ของที่มีอยู่แล้วแต่ไม่มีในไฟล์ต้องไม่หาย
+    // upsert — ของที่มีอยู่แล้วแต่ไม่มีในชุดใหม่ต้องไม่หาย
     const merged = Model.mergeImport(items, parsed.items);
     await Storage.setItems(merged.items);
 
-    // mergeImport แจก id ใหม่ให้ชิ้นที่ id ซ้ำกันเองในไฟล์ ต้องตามให้รูปไปถูกชิ้น
+    // mergeImport แจก id ใหม่ให้ชิ้นที่ id ซ้ำกันเองในชุด ต้องตามให้รูปไปถูกชิ้น
     // จับคู่ด้วยหัวข้อ+วันที่สร้าง ซึ่งไม่เปลี่ยนตอนแจก id ใหม่
     const keptIds = new Map(
       parsed.items.map((entry) => {
@@ -206,23 +267,23 @@ el("restoreBtn").addEventListener("click", async () => {
         await Storage.setImages(id, list);
         restored += list.length;
       } catch (error) {
-        failed += list.length; // เขียนไม่ได้ชุดเดียว ต้องไม่ล้มทั้งการกู้คืน
+        failed += list.length; // เขียนไม่ได้ชุดเดียว ต้องไม่ล้มทั้งงาน
       }
     }
 
-    el("working").hidden = true;
+    el("stage").hidden = true;
     const after = await refreshVault();
 
     const box = el("result");
     box.hidden = false;
     box.classList.toggle("is-bad", failed > 0);
-    el("resultHead").textContent = failed ? "กู้คืนแล้ว แต่ไม่ครบ" : "กู้คืนเข้าคลังแล้ว";
+    el("resultHead").textContent = failed ? "บันทึกแล้ว แต่ไม่ครบ" : "บันทึกเข้าคลังแล้ว";
 
     const parts = [`เพิ่ม ${merged.added}`, `อัปเดต ${merged.updated}`];
     if (restored) parts.push(`รูป ${restored} ใบ`);
     if (skipped) parts.push(`ข้ามรูป ${skipped} ใบ (ชิ้นนั้นมีรูปอยู่แล้ว)`);
     if (failed) parts.push(`เขียนรูปไม่สำเร็จ ${failed} ใบ`);
-    if (merged.redone) parts.push(`id ซ้ำในไฟล์ ${merged.redone} (แยกเป็นคนละชิ้นให้แล้ว)`);
+    if (merged.redone) parts.push(`id ซ้ำในชุด ${merged.redone} (แยกเป็นคนละชิ้นให้แล้ว)`);
     el("resultLead").textContent = parts.join(" · ");
 
     // อ่านกลับจากคลังจริงมายืนยัน ไม่ใช่รายงานจากตัวแปรในหน้านี้
@@ -234,13 +295,50 @@ el("restoreBtn").addEventListener("click", async () => {
     const box = el("result");
     box.hidden = false;
     box.classList.add("is-bad");
-    el("resultHead").textContent = "กู้คืนไม่สำเร็จ";
+    el("resultHead").textContent = "บันทึกไม่สำเร็จ";
     el("resultLead").textContent = error.message;
-    el("resultCheck").textContent = "คลังยังเหมือนเดิม ไฟล์สำรองไม่ถูกแตะ ลองใหม่ได้";
+    el("resultCheck").textContent = "คลังยังเหมือนเดิม ต้นทางไม่ถูกแตะ ลองใหม่ได้";
   } finally {
     staged = null;
+    el("restoreBtn").disabled = false;
     el("file").value = "";
   }
 });
 
+// ── ส่งออก ─────────────────────────────────────────────────────────
+el("exportBtn").addEventListener("click", async () => {
+  const note = el("exportNote");
+  note.hidden = false;
+  note.textContent = "กำลังรวมไฟล์…";
+  try {
+    const items = await Storage.getItems();
+    const images = {};
+    let imageCount = 0;
+    for (const item of items) {
+      try {
+        const list = await Storage.getImages(item.id);
+        if (list.length) {
+          images[item.id] = list;
+          imageCount += list.length;
+        }
+      } catch (error) {
+        // รูปชิ้นเดียวอ่านไม่ได้ ต้องไม่ทำให้ backup ทั้งก้อนล่ม
+      }
+    }
+
+    const text = JSON.stringify(Model.toExport(items, Date.now(), images));
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `doodee-future-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    note.textContent = `ส่งออกแล้ว ${items.length} ผลงาน · รูป ${imageCount} ใบ · ${fmtBytes(text.length)}`;
+  } catch (error) {
+    note.textContent = `ส่งออกไม่สำเร็จ: ${error.message}`;
+  }
+});
+
+loadToken();
 refreshVault();

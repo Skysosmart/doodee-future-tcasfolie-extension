@@ -2,20 +2,20 @@
 <html lang="th">
   <head>
     <meta charset="utf-8" />
-    <title>สำรองและกู้คืนคลัง — Doodee future</title>
+    <title>คลัง Doodee — ซิงก์ สำรอง กู้คืน</title>
     <link rel="stylesheet" href="import.css" />
     <link rel="stylesheet" href="backup.css" />
   </head>
   <body>
     <header class="topbar">
       <span class="brand">Doodee</span>
-      <span class="crumb">สำรองและกู้คืนคลัง</span>
+      <span class="crumb">คลังผลงาน — ซิงก์ สำรอง กู้คืน</span>
     </header>
 
     <main class="wrap">
       <section class="card">
         <h1>คลังตอนนี้</h1>
-        <div id="stats" class="stats">
+        <div class="stats">
           <div class="stat"><b id="statItems">–</b><span>ผลงาน</span></div>
           <div class="stat"><b id="statImages">–</b><span>รูป</span></div>
           <div class="stat"><b id="statSize">–</b><span>พื้นที่ที่ใช้</span></div>
@@ -25,21 +25,39 @@
       </section>
 
       <section class="card">
-        <h1>สำรองไว้</h1>
+        <h1>ดึงจากเว็บ doodee-future</h1>
         <p class="lead">
-          ได้ไฟล์เดียวจบ ทั้งข้อความและรูป เก็บไว้นอกโฟลเดอร์ชั่วคราว
-          (อย่าไว้ใน <code>/tmp</code> — ระบบล้างเมื่อไหร่ก็ได้)
+          เว็บอ่านเล่มพอร์ตด้วย OCR แล้วส่ง JSON มาตรง ๆ ไม่ต้องดาวน์โหลดไฟล์เอง
+          ต้องล็อกอินในเว็บอยู่ก่อน
         </p>
-        <button id="exportBtn" type="button" class="primary">ส่งออกไฟล์สำรอง</button>
-        <p id="exportNote" class="lead" hidden></p>
+        <p class="endpoint"><code id="apiUrl"></code></p>
+
+        <div class="rowbtns">
+          <button id="pullBtn" type="button" class="primary">ดึงจากเว็บ</button>
+          <button id="openSite" type="button" class="ghost">เปิดหน้าพอร์ตในเว็บ</button>
+          <button id="tokenToggle" type="button" class="ghost">ใช้โทเคน</button>
+        </div>
+
+        <div id="tokenBox" class="tokenbox" hidden>
+          <label for="token">โทเคนจากหน้าโปรไฟล์</label>
+          <div class="rowbtns">
+            <input id="token" type="password" autocomplete="off" placeholder="วางโทเคนที่เว็บออกให้" />
+            <button id="tokenSave" type="button" class="ghost">จำไว้</button>
+            <button id="tokenClear" type="button" class="ghost">ลบทิ้ง</button>
+          </div>
+          <p class="lead">
+            ใช้เมื่อเว็บตอบว่ายังไม่ได้ล็อกอิน ทั้งที่ล็อกอินอยู่ —
+            คุกกี้ที่ตั้ง <code>SameSite=Lax</code> ส่งข้ามมาจากส่วนขยายไม่ได้
+            โทเคนเก็บไว้ในเครื่อง และส่งไปที่ <code>doodee-future.com</code> เท่านั้น
+          </p>
+        </div>
+
+        <p id="pullNote" class="lead"></p>
       </section>
 
       <section class="card">
         <h1>กู้คืนจากไฟล์</h1>
-        <p class="lead">
-          เติมของที่หายกลับเข้าคลัง ไม่ลบของที่มีอยู่
-          และไม่ทับรูปของชิ้นที่แนบไว้แล้ว
-        </p>
+        <p class="lead">ไฟล์ที่ได้จากปุ่มส่งออกด้านล่าง หรือไฟล์ JSON ที่เว็บให้ดาวน์โหลดมา</p>
 
         <label id="drop" class="drop" for="file">
           <input id="file" type="file" accept="application/json,.json" hidden />
@@ -48,33 +66,43 @@
         </label>
 
         <p id="pickError" class="error" hidden></p>
+        <p class="privacy">ไฟล์อ่านในเครื่องเท่านั้น</p>
+      </section>
 
-        <div id="preview" hidden>
-          <h2>ในไฟล์นี้มี</h2>
-          <div class="stats">
-            <div class="stat"><b id="fileItems">–</b><span>ผลงาน</span></div>
-            <div class="stat"><b id="fileImages">–</b><span>รูป</span></div>
-            <div class="stat"><b id="fileSize">–</b><span>ขนาดไฟล์</span></div>
-          </div>
-          <p id="fileNote" class="lead"></p>
-          <div class="rowbtns">
-            <button id="restoreBtn" type="button" class="primary">กู้คืนเข้าคลัง</button>
-            <button id="cancelBtn" type="button" class="ghost">เลือกไฟล์อื่น</button>
-          </div>
+      <section id="stage" class="card" hidden>
+        <h1>ตรวจก่อนเข้าคลัง</h1>
+        <div class="stats">
+          <div class="stat"><b id="fileItems">–</b><span>ผลงาน</span></div>
+          <div class="stat"><b id="fileImages">–</b><span>รูป</span></div>
+          <div class="stat"><b id="fileSize">–</b><span>ขนาดข้อมูล</span></div>
+        </div>
+        <p id="fileNote" class="lead"></p>
+        <p id="fileWarn" class="error" hidden></p>
+        <div class="rowbtns">
+          <button id="restoreBtn" type="button" class="primary">บันทึกเข้าคลัง</button>
+          <button id="cancelBtn" type="button" class="ghost">ยกเลิก</button>
         </div>
 
         <div id="working" hidden>
           <p id="workingText" class="lead">กำลังเขียนลงคลัง…</p>
           <div class="bar"><div id="barFill" class="bar-fill"></div></div>
         </div>
+      </section>
 
-        <div id="result" class="result" hidden>
-          <h2 id="resultHead"></h2>
-          <p id="resultLead" class="lead"></p>
-          <p id="resultCheck" class="lead"></p>
-        </div>
+      <section id="result" class="card result" hidden>
+        <h1 id="resultHead"></h1>
+        <p id="resultLead" class="lead"></p>
+        <p id="resultCheck" class="lead"></p>
+      </section>
 
-        <p class="privacy">ไฟล์อ่านในเครื่องเท่านั้น ไม่ถูกอัปโหลดไปที่ไหน</p>
+      <section class="card">
+        <h1>สำรองไว้</h1>
+        <p class="lead">
+          ไฟล์เดียวจบ ทั้งข้อความและรูป เก็บไว้นอกโฟลเดอร์ชั่วคราว
+          (อย่าไว้ใน <code>/tmp</code> — ระบบล้างเมื่อไหร่ก็ได้)
+        </p>
+        <button id="exportBtn" type="button" class="ghost">ส่งออกไฟล์สำรอง</button>
+        <p id="exportNote" class="lead" hidden></p>
       </section>
     </main>
 

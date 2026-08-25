@@ -439,8 +439,9 @@ el("pdfBtn").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("import.html") });
 });
 
-// หน้าสำรอง/กู้คืนเป็นแท็บของตัวเอง ไม่ทำใน popup — popup ปิดตัวเองตอน file dialog เปิด
+// หน้าซิงก์/สำรองเป็นแท็บของตัวเอง ไม่ทำใน popup — popup ปิดตัวเองตอน file dialog เปิด
 // change เลยไม่เคยยิง ไฟล์ที่เลือกหายเงียบ ๆ (เจอจริง: กู้ backup แล้วคลังยังว่าง)
+// การดึงจากเว็บก็เหมือนกัน โหลด 11 MB แล้วเขียนรูปทีละชุดใช้เวลาเกินอายุ popup
 function openBackupPage() {
   chrome.tabs.create({ url: chrome.runtime.getURL("backup.html") });
 }
