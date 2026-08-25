@@ -13,6 +13,8 @@
   // ดัชนีจำนวนรูปต่อชิ้น { itemId: count } — ให้การ์ดโชว์ป้ายได้โดยไม่ต้องดึง base64
   // ทุกใบขึ้นมาเทียบ (get(null) ดึงทุกคีย์รวมรูปหลายสิบ MB ทุกครั้งที่วาดใหม่)
   const IMAGE_INDEX_KEY = "imgIndex";
+  // ธงว่าผู้ใช้กด "นำเข้าอัตโนมัติ" ค้างไว้ รอจังหวะที่เว็บส่งแฟ้มขึ้นเซิร์ฟเวอร์
+  const AUTO_IMPORT_KEY = "autoImportArmed";
 
   // ย้ายข้อมูลรุ่นเก่าที่ยังไม่มี id — เกิดครั้งเดียวแล้วจบ
   // panel ส่ง { migrate: false } เพราะถ้าสอง context อ่านพร้อมกันตอนยังไม่มี id
@@ -110,11 +112,24 @@
     });
   }
 
+  // ติดอาวุธไว้ข้ามการรีโหลดหน้า — ผู้ใช้ต้องกด F5 หลังกดปุ่มนำเข้าอัตโนมัติ
+  // ถ้าเก็บไว้แค่ในตัวแปร สถานะจะหายไปพร้อมหน้าเดิมแล้วดักไม่ทัน
+  async function getAutoImportArmed() {
+    const data = await chrome.storage.local.get(AUTO_IMPORT_KEY);
+    return data[AUTO_IMPORT_KEY] === true;
+  }
+
+  async function setAutoImportArmed(armed) {
+    if (armed === true) await chrome.storage.local.set({ [AUTO_IMPORT_KEY]: true });
+    else await chrome.storage.local.remove(AUTO_IMPORT_KEY);
+  }
+
   root.Storage = {
     ITEMS_KEY,
     PANEL_KEY,
     IMAGE_PREFIX,
     IMAGE_INDEX_KEY,
+    AUTO_IMPORT_KEY,
     getItems,
     setItems,
     onItemsChanged,
@@ -125,5 +140,7 @@
     getImageCounts,
     removeImages,
     onImagesChanged,
+    getAutoImportArmed,
+    setAutoImportArmed,
   };
 })(globalThis);

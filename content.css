@@ -461,3 +461,58 @@
   font-size: 11px;
   color: var(--ink-faint);
 }
+
+/* ---------- นำเข้าอัตโนมัติ ---------- */
+.autobar {
+  padding: 10px 14px 0;
+}
+
+.autobtn {
+  width: 100%;
+  border-radius: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--sky-line);
+  background: var(--sky-soft);
+  color: var(--sky);
+  font-family: var(--font-head);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.autobtn:hover {
+  background: #e7f2ff;
+}
+
+/* ตอนรอจับข้อมูล ปุ่มต้องดูต่างจากตอนกดได้ชัด ๆ ไม่งั้นผู้ใช้กดซ้ำแล้วปิดโหมดตัวเอง */
+.autobtn.is-armed {
+  background: #fff7e2;
+  border-color: #f0dcae;
+  color: #8a6a1d;
+}
+
+.autobtn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.auto-steps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.auto-steps li {
+  font-size: 12.5px;
+}
+
+.auto-steps b {
+  font-weight: 600;
+}
+
+.auto-steps small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-soft);
+}

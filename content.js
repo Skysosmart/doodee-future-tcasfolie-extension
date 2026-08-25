@@ -804,6 +804,8 @@
 
   cancelBtn.addEventListener("click", () => {
     pendingPlan = null;
+    // ปุ่มเดียวกันนี้ยังใช้ยกเลิกโหมดนำเข้าอัตโนมัติด้วย — ที่ค้างอยู่ต้องดับไปพร้อมข้อความ
+    if (autoArmed) setArmed(false);
     clearNote();
   });
 
@@ -1412,6 +1414,323 @@
     renderList();
   }
 
+  // ---------- นำเข้าอัตโนมัติจากแฟ้มที่กรอกไว้บนเว็บ ----------
+  // ทางเดียวที่จะได้ผลงานทั้งแฟ้มมาแบบครบ ๆ คือดักตอนเว็บส่งขึ้นเซิร์ฟเวอร์เอง
+  // (อ่านจาก DOM ไม่ได้: หน้าแสดงทีละบล็อก ต้องกดเปิดทีละอัน และรูปเป็น thumbnail)
+  // interceptor.js ใน main world เป็นคนดัก แล้วส่งมาที่นี่ผ่าน postMessage
+  let autoArmed = false;
+  let autoBusy = false;
+
+  const autoBar = document.createElement("div");
+  autoBar.className = "autobar";
+
+  const autoBtn = document.createElement("button");
+  autoBtn.type = "button";
+  autoBtn.className = "autobtn";
+  autoBtn.textContent = "⇩ นำเข้าอัตโนมัติ";
+  autoBtn.title = "ดึงผลงานทั้งหมดจากแฟ้มบนเว็บเข้าคลัง";
+  autoBar.append(autoBtn);
+
+  function applyAutoUI() {
+    autoBtn.textContent = autoArmed ? "⏳ รออยู่… กดบันทึกแฟ้มได้เลย" : "⇩ นำเข้าอัตโนมัติ";
+    autoBtn.classList.toggle("is-armed", autoArmed);
+    autoBtn.disabled = autoBusy;
+  }
+
+  // ข้อความจบงาน ไม่ใช่ผลของการเติมฟอร์ม จึงต้องไม่มีปุ่ม "ย้อนกลับ" ให้กด
+  // (ย้อนของที่เข้าคลังไปแล้วต้องไปลบทีละชิ้นจากไอคอนส่วนขยาย)
+  function showDone(message) {
+    showNote(message);
+    note.classList.add("is-ok");
+  }
+
+  function autoSteps() {
+    clearNote();
+    noteText.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "plan-head";
+    head.textContent = "เปิดโหมดนำเข้าอัตโนมัติแล้ว — เหลือขั้นเดียว";
+    const ol = document.createElement("ol");
+    ol.className = "auto-steps";
+    for (const [main, sub] of [
+      [
+        "กดปุ่ม “บันทึกแฟ้ม” ของเว็บ",
+        "ตอนนั้นเว็บส่งทั้งแฟ้ม + ขอลิงก์รูปพร้อมกัน ส่วนขยายจะคัดลอกเข้าคลังให้เอง",
+      ],
+    ]) {
+      const li = document.createElement("li");
+      const b = document.createElement("b");
+      b.textContent = main;
+      const small = document.createElement("small");
+      small.textContent = sub;
+      li.append(b, small);
+      ol.appendChild(li);
+    }
+    const foot = document.createElement("div");
+    foot.className = "note-sub";
+    foot.textContent = "ไม่ต้องกดอะไรในแผงนี้อีก · โหมดนี้ค้างไว้จนกว่าจะดักได้หรือกดยกเลิก";
+    noteText.append(head, ol, foot);
+    cancelBtn.hidden = false;
+    note.classList.remove("is-ok");
+    note.hidden = false;
+  }
+
+  // ตัวดักถูกฉีดเข้า main world ตั้งแต่ document_start โดย manifest
+  // แต่หน้าที่เปิดค้างไว้ตั้งแต่ก่อน reload ส่วนขยายจะไม่มีมัน — เช็คก่อนแล้วฉีดซ้ำให้เอง
+  // ฉีดตอนนี้ยังทัน เพราะของที่ต้องดัก (PUT แฟ้ม + presign) เกิดตอนผู้ใช้กดบันทึกทีหลัง
+  function pingTap() {
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        window.removeEventListener("message", onReply);
+        resolve(false);
+      }, 600);
+      function onReply(event) {
+        if (event.source !== window) return;
+        const m = event.data;
+        if (!m || m.tag !== "doodee-future:pong" || m.requestId !== requestId) return;
+        clearTimeout(timer);
+        window.removeEventListener("message", onReply);
+        resolve(true);
+      }
+      window.addEventListener("message", onReply);
+      window.postMessage({ tag: "doodee-future:ping", requestId }, "*");
+    });
+  }
+
+  async function ensureTap() {
+    if (await pingTap()) return true;
+    try {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = chrome.runtime.getURL("interceptor.js");
+        script.addEventListener("load", () => {
+          script.remove();
+          resolve();
+        });
+        script.addEventListener("error", () => reject(new Error("โหลดตัวดักไม่ได้")));
+        (document.head || document.documentElement).appendChild(script);
+      });
+    } catch (error) {
+      return false;
+    }
+    return pingTap();
+  }
+
+  async function setArmed(armed) {
+    autoArmed = armed === true;
+    applyAutoUI();
+    try {
+      await Storage.setAutoImportArmed(autoArmed);
+    } catch (error) {
+      // จำไม่ได้ = พอรีโหลดหน้าแล้วโหมดจะหลุด ผู้ใช้กด F5 ไปแล้วรออยู่เก้อ ต้องบอก
+      showNote("จำสถานะโหมดนำเข้าไม่ได้ — ถ้าโหลดหน้าใหม่แล้วโหมดหลุด ให้กดปุ่มนี้อีกครั้ง");
+    }
+  }
+
+  autoBtn.addEventListener("click", async () => {
+    if (autoBusy) return;
+    if (autoArmed) {
+      await setArmed(false);
+      clearNote();
+      return;
+    }
+    autoBtn.disabled = true;
+    const ready = await ensureTap();
+    autoBtn.disabled = false;
+    // ไม่มีตัวดักในหน้านี้ = กดบันทึกแฟ้มไปก็ไม่มีอะไรเกิดขึ้น ต้องบอกก่อน ไม่ใช่ปล่อยให้รอเก้อ
+    if (!ready) {
+      showNote("ตัวดักยังไม่ทำงานในหน้านี้ — โหลดหน้าใหม่ (F5) แล้วกดปุ่มนี้อีกครั้ง");
+      return;
+    }
+    await setArmed(true);
+    autoSteps();
+  });
+
+  // รูปบน S3 เปิดตรง ๆ ไม่ได้ ต้องใช้ presigned URL ที่เว็บขอจาก POST /folios/presign
+  // (ลิงก์มี ?AWSAccessKeyId=&Expires=&Signature= ต่อท้าย และหมดอายุ — ห้ามตัด query ทิ้ง)
+  // interceptor ส่งลิงก์ทุกตัวที่เห็นมาสะสมไว้ที่นี่ — เก็บเฉพาะตัวที่มีลายเซ็นเท่านั้น
+  // ที่อยู่เปล่า ๆ ไม่มีประโยชน์เลย: bucket ไม่ได้เปิดสาธารณะ ยิงไปก็ได้ AccessDenied อย่างเดียว
+  const s3Seen = [];
+
+  const isSigned = (url) => /[?&]Signature=/.test(String(url));
+
+  function noteUrls(urls) {
+    for (const url of Array.isArray(urls) ? urls : []) {
+      if (typeof url === "string" && isSigned(url) && !s3Seen.includes(url)) s3Seen.push(url);
+    }
+  }
+
+  const urlPath = (url) => String(url).split("?")[0];
+
+  function knownUrls() {
+    const out = s3Seen.slice();
+    // รูปที่หน้าเว็บกำลังแสดงอยู่ก็มาจาก presign ชุดเดียวกัน และยังไม่หมดอายุ
+    for (const img of document.querySelectorAll('img[src*="amazonaws.com"]')) {
+      if (img.src && isSigned(img.src) && !out.includes(img.src)) out.push(img.src);
+    }
+    return out;
+  }
+
+  function findSigned(filename, known) {
+    const tail = "/" + filename;
+    // ตัวใหม่ที่สุดก่อน — ลิงก์ที่เพิ่งได้มามีเวลาเหลือมากกว่าตัวที่เห็นตั้งแต่เปิดหน้า
+    for (let i = known.length - 1; i >= 0; i -= 1) {
+      if (urlPath(known[i]).endsWith(tail)) return known[i];
+    }
+    return "";
+  }
+
+  // ที่อยู่เดียวที่ใช้ได้คือ presigned URL ของไฟล์นั้นเอง — ไม่มีตัวสำรอง ไม่ประกอบ URL เอง
+  // (เคยลองประกอบเอง: ได้ AccessDenied ทุกใบ แถมยิงทิ้งเปล่าหลายรอบต่อรูปหนึ่งใบ)
+  function imageUrls(filename, known) {
+    const signed = findSigned(filename, known);
+    return signed ? [signed] : [];
+  }
+
+  // ตอนกด "บันทึกแฟ้ม" เว็บยิง POST /folios/presign ของมันเองอยู่แล้ว แล้วได้ลิงก์กลับมาทั้งชุด
+  // เรารอเก็บของชุดนั้น ไม่ยิงขอเอง — ไม่ต้องเดารูปแบบคำขอ ไม่ต้องยืมสิทธิ์ของผู้ใช้ไปยิงอะไรเพิ่ม
+  // presign กับ PUT แฟ้มมาไล่ ๆ กัน ใครมาก่อนก็ได้ จึงต้องรอเป็นช่วงเวลา ไม่ใช่เช็คครั้งเดียว
+  const LINK_WAIT_MS = 30000;
+
+  function missingNames(filenames) {
+    const known = knownUrls();
+    return filenames.filter((name) => !findSigned(name, known));
+  }
+
+  async function waitForLinks(filenames, onProgress) {
+    const deadline = Date.now() + LINK_WAIT_MS;
+    let missing = missingNames(filenames);
+    while (missing.length && Date.now() < deadline) {
+      if (onProgress) onProgress(filenames.length - missing.length);
+      await sleep(400);
+      missing = missingNames(filenames);
+    }
+    return missing;
+  }
+
+  async function fetchImage(urls) {
+    try {
+      const reply = await chrome.runtime.sendMessage({ tag: "doodee-future:fetch-image", urls });
+      if (reply && reply.ok) return reply;
+      return { ok: false, why: (reply && reply.why) || "ไม่มีคำตอบจากส่วนขยาย" };
+    } catch (error) {
+      // service worker หลับ/ส่วนขยายเพิ่งรีโหลด — ข้อความ ไม่ใช่ผลงาน ยังเข้าคลังไปแล้ว
+      return { ok: false, why: error && error.message ? error.message : String(error) };
+    }
+  }
+
+  // ของเดิมที่มีอยู่ห้ามหาย: ชิ้นที่เคยนำเข้าแล้วอาจมีรูปที่ผู้ใช้เพิ่มเองอยู่ด้วย
+  // เทียบด้วยชื่อไฟล์ ซ้ำแล้วไม่ต้องดึงใหม่ (ประหยัดทั้งเวลาและที่เก็บ)
+  async function saveImages(itemId, filenames, known) {
+    const current = await Storage.getImages(itemId);
+    const have = new Set(current.map((img) => img.name));
+    const want = filenames.filter((name) => !have.has(name));
+    if (!want.length) return { ok: 0, failed: 0 };
+    let ok = 0;
+    let failed = 0;
+    const next = current.slice();
+    for (const name of want) {
+      let urls = imageUrls(name, known);
+      let got = urls.length ? await fetchImage(urls) : { ok: false, why: "ยังไม่ได้ลิงก์จาก presign" };
+      // ลิงก์อาจเพิ่งมาถึงหลังรอบแรกผ่านไป — ลองอีกทีด้วยชุดล่าสุดก่อนตัดสินว่าพลาด
+      if (!got.ok) {
+        const fresh = imageUrls(name, knownUrls());
+        if (fresh.length && fresh[0] !== urls[0]) {
+          urls = fresh;
+          got = await fetchImage(urls);
+        }
+      }
+      if (!got.ok) {
+        // ข้อความบนแผงบอกได้แค่ "ดึงไม่ได้" — สาเหตุจริงต้องดูที่นี่ (คอนโซลของหน้าเว็บ)
+        console.warn("[doodee] ดึงรูปไม่สำเร็จ", name, got.why, urls);
+        failed += 1;
+        continue;
+      }
+      next.push({ name, type: got.type || "image/jpeg", data: got.data });
+      ok += 1;
+    }
+    if (ok) await Storage.setImages(itemId, next);
+    return { ok, failed };
+  }
+
+  async function runAutoImport(msg) {
+    const parsed = Model.folioToItems(msg.fields);
+    if (!parsed.length) {
+      showNote("ดักแฟ้มได้แล้ว แต่ยังไม่มีผลงานที่กรอกหัวข้อไว้ให้นำเข้า");
+      await setArmed(false);
+      return;
+    }
+
+    const current = await Storage.getItems({ migrate: false });
+    const merged = Model.mergeFolioItems(current, parsed);
+    await Storage.setItems(merged.items);
+    refresh(merged.items);
+    // ปลดโหมดทันทีที่ข้อความเข้าคลังแล้ว — กันดักซ้ำถ้าผู้ใช้กดบันทึกแฟ้มอีกรอบระหว่างดึงรูป
+    await setArmed(false);
+
+    const summary = `นำเข้าแล้ว ${merged.added} ชิ้นใหม่` + (merged.updated ? ` · อัปเดต ${merged.updated} ชิ้นเดิม` : "");
+    const total = parsed.reduce((sum, entry) => sum + entry.filenames.length, 0);
+    if (!total) {
+      showDone(`${summary} — แฟ้มนี้ไม่มีรูปแนบ`);
+      return;
+    }
+
+    noteUrls(msg.s3);
+    showNote(`${summary} — รอลิงก์รูปจากเว็บ 0/${total} ใบ…`);
+    // รอชุดลิงก์ที่เว็บขอเองตอนบันทึกแฟ้มให้มาครบก่อน ค่อยเริ่มดึง
+    const never = await waitForLinks(
+      parsed.flatMap((entry) => entry.filenames),
+      (ready) => showNote(`${summary} — รอลิงก์รูปจากเว็บ ${ready}/${total} ใบ…`),
+    );
+
+    showNote(`${summary} — กำลังดึงรูป ${total} ใบ…`);
+    const known = knownUrls();
+    const byId = new Map(merged.pairs.map((pair) => [pair.id, pair.filenames]));
+    let ok = 0;
+    let failed = 0;
+    for (const [id, filenames] of byId) {
+      if (!filenames.length) continue;
+      const got = await saveImages(id, filenames, known);
+      ok += got.ok;
+      failed += got.failed;
+      showNote(`${summary} — กำลังดึงรูป ${ok + failed}/${total} ใบ…`);
+    }
+    await refreshImageCounts();
+    // แยกสาเหตุให้ชัด: ไม่ได้ลิงก์มาเลย ≠ ได้ลิงก์แล้วโหลดไม่ผ่าน — วิธีแก้คนละทาง
+    const why = never.length
+      ? ` (ดึงไม่ได้ ${failed} ใบ — เว็บไม่ได้ส่งลิงก์รูปมาตอนบันทึก ลองกดบันทึกแฟ้มอีกครั้ง)`
+      : ` (ดึงไม่ได้ ${failed} ใบ — ลิงก์อาจหมดอายุ กดบันทึกแฟ้มอีกครั้งแล้วนำเข้าใหม่)`;
+    showDone(`${summary} · รูป ${ok} ใบ` + (failed ? why : ""));
+  }
+
+  // ลิงก์รูปเข้ามาเรื่อย ๆ ตลอดเวลาที่ผู้ใช้เปิดดูบล็อกต่าง ๆ — เก็บไว้ก่อนเสมอ
+  // ไม่ต้องรอเปิดโหมดนำเข้า (ตอนเปิดโหมดแล้วค่อยเก็บ = ลิงก์ที่หน้าโหลดไปแล้วหายหมด)
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    const msg = event.data;
+    if (msg && msg.tag === "doodee-future:s3") noteUrls(msg.urls);
+  });
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    const msg = event.data;
+    if (!msg || msg.tag !== "doodee-future:folio") return;
+    if (!autoArmed || autoBusy) return; // ไม่ได้เปิดโหมดไว้ = ไม่แตะข้อมูลของเขา
+    autoBusy = true;
+    applyAutoUI();
+    runAutoImport(msg)
+      .catch((error) => {
+        showNote(`นำเข้าอัตโนมัติไม่สำเร็จ: ${error && error.message ? error.message : error}`);
+      })
+      .finally(() => {
+        autoBusy = false;
+        applyAutoUI();
+      });
+  });
+
+  body.prepend(autoBar); // ประกาศทีหลัง body.append จึงมาแปะเอาตอนนี้
+
   // ต่อกับ documentElement ไม่ใช่ body เผื่อ body มี transform
   // ซึ่งจะกลายเป็น containing block แล้วทำให้ position:fixed เพี้ยน
   // เหตุการณ์จาก shadow จะ retarget มาเป็น host แล้ว bubble ต่อไปถึง document
@@ -1433,6 +1752,14 @@
       Storage.onImagesChanged(() => refreshImageCounts());
       await refreshImageCounts();
       collapsed = await Storage.getPanelCollapsed();
+      // ผู้ใช้กดนำเข้าอัตโนมัติค้างไว้จากหน้าก่อน — โหมดต้องยังเปิดอยู่หลังโหลดใหม่
+      autoArmed = await Storage.getAutoImportArmed();
+      applyAutoUI();
+      if (autoArmed) {
+        collapsed = false; // ต้องเห็นว่ายังรออยู่ ไม่งั้นกดบันทึกแฟ้มแล้วงงว่าเกิดอะไรขึ้น
+        autoSteps();
+        ensureTap(); // โหมดค้างมาจากหน้าก่อน — หน้านี้ต้องมีตัวดักด้วย
+      }
       // ผู้ใช้กดย่อ/กางไปแล้วระหว่างรออ่าน ค่าเก่าที่เพิ่งอ่านมาถือว่าตกยุค
       if (!userToggled) applyCollapsed();
       refresh(await Storage.getItems({ migrate: false }));
