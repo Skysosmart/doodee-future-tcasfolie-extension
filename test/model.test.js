@@ -278,3 +278,62 @@ test("parseImport ไม่ยอมรับรูปที่ไม่ใช�
   assert.equal(out.images[id].length, 1);
   assert.equal(out.images[id][0].name, "ดี.jpg");
 });
+
+test("folioToItems แปลงแฟ้มที่ดักได้เป็นผลงานตามหมวด พร้อมชื่อไฟล์รูป", () => {
+  // ค่าที่ดักได้จาก multipart เป็น string ของ JSON เสมอ — ต้องรับรูปนี้ได้ตรง ๆ
+  const parsed = M.folioToItems({
+    awards: JSON.stringify([
+      {
+        title: "เหรียญทองคณิต",
+        description: "แข่งระดับประเทศ",
+        level: "ระดับชาติ",
+        organizer: "สสวท.",
+        result: "เหรียญทอง",
+        filenames: ["awardFiles0_abc.png", "awardFiles0_abc.png"],
+        enabled: true,
+      },
+      { title: "", description: "บล็อกเปล่าที่ยังไม่ได้กรอก", filenames: [] },
+    ]),
+    activities: JSON.stringify([{ title: "ค่ายอาสา", description: "3 วัน", filenames: [] }]),
+    creatives: "[]",
+    trainings: "ไม่ใช่ JSON",
+  });
+
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].item.type, "รางวัล / เกียรติบัตร");
+  assert.equal(parsed[0].item.org, "สสวท.");
+  assert.equal(parsed[0].item.level, "ระดับชาติ");
+  assert.equal(parsed[0].item.result, "เหรียญทอง");
+  assert.deepEqual(parsed[0].filenames, ["awardFiles0_abc.png"]); // ชื่อซ้ำต้องเหลือใบเดียว
+  assert.equal(parsed[1].item.type, "กิจกรรม");
+});
+
+test("folioToItems ทิ้งระดับที่ไม่ตรงตัวเลือกของเว็บ", () => {
+  const parsed = M.folioToItems({ awards: [{ title: "ก", level: "ระดับหมู่บ้าน" }] });
+  assert.equal(parsed[0].item.level, "");
+});
+
+test("mergeFolioItems นำเข้าซ้ำแล้วไม่ได้ของซ้ำ และ id เดิมอยู่ครบ", () => {
+  const first = M.folioToItems({ awards: [{ title: "เหรียญทอง", description: "เก่า" }] });
+  const start = M.mergeFolioItems([], first);
+  assert.equal(start.added, 1);
+  const kept = { ...start.items[0], tags: ["วิศวะ"] }; // แท็กที่ผู้ใช้ตั้งเองทีหลัง
+
+  const again = M.folioToItems({ awards: [{ title: "เหรียญทอง", description: "แก้แล้ว" }] });
+  const second = M.mergeFolioItems([kept], again);
+
+  assert.equal(second.items.length, 1);
+  assert.equal(second.added, 0);
+  assert.equal(second.updated, 1);
+  assert.equal(second.items[0].id, kept.id); // รูปผูกกับ id นี้ ห้ามเปลี่ยน
+  assert.equal(second.items[0].detail, "แก้แล้ว");
+  assert.deepEqual(second.items[0].tags, ["วิศวะ"]);
+  assert.deepEqual(second.pairs[0], { id: kept.id, filenames: [] });
+});
+
+test("mergeFolioItems ไม่แตะผลงานที่ไม่เกี่ยวกับแฟ้มที่นำเข้า", () => {
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ของที่พิมพ์เอง" });
+  const out = M.mergeFolioItems([mine], M.folioToItems({ awards: [{ title: "ใหม่" }] }));
+  assert.equal(out.items.length, 2);
+  assert.equal(out.items[0].id, mine.id);
+});

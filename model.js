@@ -213,6 +213,95 @@
     return { items, added, updated, redone };
   }
 
+  // ---------- นำเข้าอัตโนมัติจากแฟ้มบน TCASFolio ----------
+  // ชื่อฟิลด์ใน multipart ที่เว็บส่งตอนกด "บันทึกแฟ้ม" -> หมวดในคลังของเรา
+  // ลำดับตรงกับ TYPES เพื่อให้ผลลัพธ์เรียงเหมือนที่เห็นบนใบสมัคร
+  const FOLIO_SECTIONS = [
+    ["awards", "รางวัล / เกียรติบัตร"],
+    ["projects", "โครงงาน / วิจัย"],
+    ["activities", "กิจกรรม"],
+    ["trainings", "การอบรม"],
+    ["creatives", "ผลงานสร้างสรรค์"],
+  ];
+
+  // ค่าที่ดักได้เป็น string ของ JSON เสมอ (multipart ไม่มีชนิดข้อมูล)
+  // แต่ถ้ามีใครส่ง array มาแล้วก็รับได้ ไม่ต้องแปลงกลับไปกลับมา
+  function parseFolioSection(value) {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== "string" || !value.trim()) return [];
+    try {
+      const data = JSON.parse(value);
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      return []; // ฟิลด์เดียวพังต้องไม่ทำให้ทั้งการนำเข้าล้ม
+    }
+  }
+
+  function folioFilenames(entry) {
+    const raw = Array.isArray(entry && entry.filenames) ? entry.filenames : [];
+    const out = [];
+    for (const name of raw) {
+      const clean = str(name);
+      if (clean && !out.includes(clean)) out.push(clean);
+    }
+    return out;
+  }
+
+  // แฟ้มที่ดักได้ -> รายการผลงาน + ชื่อไฟล์รูปของแต่ละชิ้น
+  // ชิ้นที่ไม่มีหัวข้อเลยข้าม — บล็อกเปล่าที่ผู้ใช้กดเพิ่มไว้แต่ยังไม่กรอกก็ถูกส่งมาด้วย
+  function folioToItems(fields, options) {
+    const opts = options || {};
+    const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+    const out = [];
+    for (const [key, type] of FOLIO_SECTIONS) {
+      for (const entry of parseFolioSection(fields && fields[key])) {
+        if (!entry || typeof entry !== "object") continue;
+        const title = str(entry.title);
+        if (!title) continue;
+        out.push({
+          item: makeItem(
+            {
+              type,
+              title,
+              org: str(entry.organizer),
+              level: str(entry.level),
+              result: str(entry.result),
+              hours: "",
+              detail: str(entry.description),
+              tags: [],
+            },
+            { now },
+          ),
+          filenames: folioFilenames(entry),
+        });
+      }
+    }
+    return out;
+  }
+
+  // นำเข้าซ้ำรอบสองต้องไม่ได้ของซ้ำ — เทียบด้วย หมวด+หัวข้อ เพราะแฟ้มบนเว็บไม่มี id
+  // ให้เรา ชิ้นเดิมจะถูกเขียนทับด้วยข้อมูลล่าสุดจากแฟ้ม แต่ id เดิมอยู่ครบ
+  // (รูปที่ผูกกับ id นั้นจึงไม่หลุด และแท็กที่ผู้ใช้ตั้งเองไว้ก็ยังอยู่)
+  function mergeFolioItems(current, incoming) {
+    let items = current;
+    const pairs = [];
+    let added = 0;
+    let updated = 0;
+    for (const entry of incoming) {
+      const match = items.find(
+        (old) => old.type === entry.item.type && old.title === entry.item.title,
+      );
+      const item = match
+        ? { ...entry.item, id: match.id, createdAt: match.createdAt, tags: match.tags }
+        : entry.item;
+      if (match) updated += 1;
+      else added += 1;
+      items = upsert(items, item);
+      pairs.push({ id: item.id, filenames: entry.filenames });
+    }
+    return { items, pairs, added, updated };
+  }
+
   root.Model = {
     TYPES,
     LEVELS,
@@ -230,5 +319,9 @@
     isImage,
     parseImport,
     mergeImport,
+    FOLIO_SECTIONS,
+    parseFolioSection,
+    folioToItems,
+    mergeFolioItems,
   };
 })(globalThis);
