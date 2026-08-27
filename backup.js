@@ -70,8 +70,29 @@ function countRawImages(text) {
   }
 }
 
+// รับได้สองรูปแบบ: ไฟล์สำรองของส่วนขยาย และไฟล์ส่งออกโปรไฟล์ของเว็บ (/api/profile/export)
+// เว็บมีปุ่มส่งออกอยู่แล้วและไฟล์นั้นมีข้อมูลครบ ผู้ใช้ที่มีไฟล์อยู่ในมือจะได้ไม่ต้องรออะไร
+function readAny(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    throw new Error("ไฟล์ไม่ใช่ JSON ที่ถูกต้อง");
+  }
+  if (SiteImport.looksLikeSiteExport(data)) {
+    const out = SiteImport.convert(data);
+    return {
+      parsed: { items: Model.normalize(out.items).items, images: {} },
+      note: `จากไฟล์ส่งออกโปรไฟล์ของเว็บ · ผลงาน ${out.counts.achievements} · กิจกรรม ${out.counts.activities}` +
+        (out.skipped ? ` · ข้ามที่ซ่อนไว้ ${out.skipped}` : ""),
+    };
+  }
+  return { parsed: Model.parseImport(text), note: "" };
+}
+
 function stageJson(text, source) {
-  const parsed = Model.parseImport(text); // โยน error ออกไปให้ผู้เรียกแสดงตามบริบท
+  const read = readAny(text); // โยน error ออกไปให้ผู้เรียกแสดงตามบริบท
+  const parsed = read.parsed;
   const kept = Object.values(parsed.images).reduce((sum, list) => sum + list.length, 0);
   const dropped = countRawImages(text) - kept;
 
@@ -79,9 +100,12 @@ function stageJson(text, source) {
   el("fileItems").textContent = parsed.items.length;
   el("fileImages").textContent = kept;
   el("fileSize").textContent = fmtBytes(text.length);
-  el("fileNote").textContent = kept
-    ? `${source} — กดบันทึกแล้วรออีกสักครู่ ระหว่างเขียนรูปห้ามปิดแท็บนี้`
-    : `${source} — ชุดนี้ไม่มีรูปติดมา จะได้แต่ข้อความ`;
+  const tail = read.note
+    ? read.note
+    : kept
+      ? "กดบันทึกแล้วรออีกสักครู่ ระหว่างเขียนรูปห้ามปิดแท็บนี้"
+      : "ชุดนี้ไม่มีรูปติดมา จะได้แต่ข้อความ";
+  el("fileNote").textContent = `${source} — ${tail}`;
 
   const warn = el("fileWarn");
   warn.hidden = dropped <= 0;

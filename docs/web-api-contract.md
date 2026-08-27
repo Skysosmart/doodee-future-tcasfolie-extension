@@ -164,3 +164,35 @@ POST /api/portfolio/analyse
   เพื่อไม่ให้เข้าใจว่าวิเคราะห์ทั้งพอร์ตทั้งที่ส่งไปครึ่งเดียว
 - `maxDuration = 180` หน้าวิเคราะห์จึงเป็นแท็บ ไม่ใช่ popup และมีตัวนับวินาทีให้เห็นว่ายังไม่ค้าง
 - **รูปไม่ถูกส่ง** ส่งแต่ข้อความ
+
+---
+
+# รับไฟล์ส่งออกโปรไฟล์ของเว็บได้ด้วย
+
+เว็บมี `GET /api/profile/export?format=json` (ปุ่มส่งออกในหน้าโปรไฟล์) อยู่แล้ว
+หน้า `backup.html` รับไฟล์นั้นตรง ๆ ได้ ไม่ต้องแปลงเอง — ใช้ตอนที่ `ดึงจากเว็บ` ยังไม่พร้อม
+หรืออยากทำงานแบบออฟไลน์
+
+รูปแบบต่างจาก endpoint ของส่วนขยายคนละอย่าง จึงมีตัวแปลงแยก (`siteImport.js`)
+
+```jsonc
+{ "exportDate": "…", "exportFormat": "json", "mode": "full",
+  "profile": { "basicInfo": {…}, "achievements": […], "extracurricular": […],
+               "skills": […], "interests": […], "education": […] },
+  "statistics": { "totalAchievements": 4, … } }
+```
+
+ที่ตัวแปลงทำ
+
+- `achievements` -> ห้าหมวดของ TCASFolio ตาม `achievement_type`
+  (`competition`/`academic`/`sports`/`certification` -> รางวัล, `arts` -> ผลงานสร้างสรรค์,
+  `leadership`/`community_service` -> กิจกรรม)
+- `extracurricular` -> ตาม `activity_type` (`research`/`academic` -> โครงงาน / วิจัย,
+  `training`/`workshop` -> การอบรม, ที่เหลือ -> กิจกรรม)
+- `achievement_level` -> สี่ระดับของ TCASFolio
+- **เคารพ `portfolio_visibility: false`** ชิ้นที่เจ้าของซ่อนไว้จะไม่ถูกนำเข้า และรายงานว่าข้ามไปกี่ชิ้น
+- ไม่มีช่องวันที่ในคลัง จึงเอา `date_achieved` / `start_date`-`end_date` ไปไว้หัว `detail`
+- `role` -> ช่องผลงาน · `hours_committed` -> ชั่วโมง (เป็น string) · `skills_gained` -> แท็ก
+
+ไฟล์นี้**ไม่มีรูป** (มีแต่ `certificate_url` ซึ่งเป็นลิงก์) รูปยังต้องมาจาก `ดึงจากเว็บ`
+หรือแนบเองในส่วนขยาย

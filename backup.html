@@ -58,7 +58,10 @@
 
       <section class="card">
         <h1>กู้คืนจากไฟล์</h1>
-        <p class="lead">ไฟล์ที่ได้จากปุ่มส่งออกด้านล่าง หรือไฟล์ JSON ที่เว็บให้ดาวน์โหลดมา</p>
+        <p class="lead">
+          รับสองแบบ: ไฟล์สำรองจากปุ่มส่งออกด้านล่าง
+          และ<b>ไฟล์ส่งออกโปรไฟล์ของ doodee-future.com</b> (ปุ่มส่งออกในหน้าโปรไฟล์)
+        </p>
 
         <label id="drop" class="drop" for="file">
           <input id="file" type="file" accept="application/json,.json" hidden />
@@ -109,6 +112,7 @@
 
     <script src="model.js"></script>
     <script src="storage.js"></script>
+    <script src="siteImport.js"></script>
     <script src="sitecall.js"></script>
     <script src="backup.js"></script>
   </body>
