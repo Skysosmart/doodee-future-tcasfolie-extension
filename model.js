@@ -57,9 +57,11 @@
       type: str(fields.type),
       title: str(fields.title),
       org: str(fields.org),
+      when: str(fields.when),
       level: LEVELS.includes(str(fields.level)) ? str(fields.level) : "",
       result: str(fields.result),
       hours: str(fields.hours),
+      link: str(fields.link),
       detail: str(fields.detail),
       tags: normalizeTags(fields.tags),
       createdAt: Number.isFinite(opts.now) ? opts.now : Date.now(),
@@ -78,10 +80,12 @@
         type: str(entry.type),
         title: str(entry.title),
         org: str(entry.org),
+        when: str(entry.when),
         // ระดับที่ไม่ตรงตัวเลือกของเว็บ ปล่อยว่างดีกว่าเก็บค่าที่เติมไม่ได้
         level: LEVELS.includes(str(entry.level)) ? str(entry.level) : "",
         result: str(entry.result),
         hours: str(entry.hours),
+        link: str(entry.link),
         detail: str(entry.detail),
         tags: normalizeTags(entry.tags),
         createdAt: Number.isFinite(entry.createdAt) ? entry.createdAt : 0,
@@ -115,7 +119,7 @@
       if (type && entry.type !== type) return false;
       if (tag && !entry.tags.includes(tag)) return false;
       if (!words.length) return true;
-      const hay = [entry.title, entry.org, entry.result, entry.detail, entry.tags.join(" ")]
+      const hay = [entry.title, entry.org, entry.when, entry.result, entry.link, entry.detail, entry.tags.join(" ")]
         .join(" ")
         .toLowerCase();
       return words.every((w) => hay.includes(w));
@@ -264,9 +268,11 @@
               type,
               title,
               org: str(entry.organizer),
+              when: str(entry.date) || str(entry.period),
               level: str(entry.level),
               result: str(entry.result),
               hours: "",
+              link: str(entry.link),
               detail: str(entry.description),
               tags: [],
             },

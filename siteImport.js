@@ -49,13 +49,12 @@
     return value.map((entry) => text(entry)).filter(Boolean);
   }
 
-  // ส่วนขยายไม่มีช่องวันที่ ใส่ไว้หัว detail แทน ไม่งั้นข้อมูลนี้หายไปเฉย ๆ
-  function withDate(detail, from, to) {
+  // ส่วนขยายมีช่อง when แล้ว (2026-09-15) — เลิกเอาวันที่ไปแปะหัว detail
+  function whenOf(from, to) {
     const one = (value) => (value ? String(value).slice(0, 10).replace(/-/g, "/") : "");
     const start = one(from);
     const end = one(to);
-    const when = start && end && start !== end ? `${start} - ${end}` : start || end;
-    return [when && `วันที่ ${when}`, detail].filter(Boolean).join("\n");
+    return start && end && start !== end ? `${start} - ${end}` : start || end;
   }
 
   function looksLikeSiteExport(data) {
@@ -63,36 +62,34 @@
   }
 
   function fromAchievement(row) {
-    const detail = withDate(text(row.description), row.date_achieved, null);
     return {
       id: `ach-${text(row.id) || text(row.title)}`,
       type: TYPE_BY_ACHIEVEMENT[text(row.achievement_type)] || "รางวัล / เกียรติบัตร",
       title: text(row.title),
       org: text(row.organization),
+      when: whenOf(row.date_achieved, null),
       level: LEVEL_BY_CODE[text(row.achievement_level)] || "",
       result: "",
       hours: "",
-      detail,
+      link: "",
+      detail: text(row.description),
       tags: tagList(row.skills_gained),
       createdAt: epoch(row.created_at),
     };
   }
 
   function fromActivity(row) {
-    const detail = withDate(
-      [text(row.description), text(row.impact_description)].filter(Boolean).join("\n"),
-      row.start_date,
-      row.end_date,
-    );
     return {
       id: `act-${text(row.id) || text(row.activity_name)}`,
       type: TYPE_BY_ACTIVITY[text(row.activity_type)] || "กิจกรรม",
       title: text(row.activity_name),
       org: text(row.organization),
+      when: whenOf(row.start_date, row.end_date),
       level: "",
       result: text(row.role),
       hours: row.hours_committed == null ? "" : String(row.hours_committed),
-      detail,
+      link: "",
+      detail: [text(row.description), text(row.impact_description)].filter(Boolean).join("\n"),
       tags: [],
       createdAt: epoch(row.created_at),
     };

@@ -88,17 +88,20 @@ test("ผ่าน normalize ของคลังโดยไม่มีอะ
   );
 });
 
-test("วันที่ไปอยู่หัว detail เพราะคลังไม่มีช่องวันที่", () => {
+test("วันที่ลงช่อง when ไม่ใช่หัว detail", () => {
+  // เดิมคลังไม่มีช่องวันที่ จึงเอาไปแปะหัว detail — ตั้งแต่ 2026-09-15 มีช่อง when แล้ว
   const out = SiteImport.convert(exportFile());
-  assert.match(out.items[1].detail, /^วันที่ 2026\/04\/01/);
-  assert.match(out.items[2].detail, /^วันที่ 2026\/03\/01 - 2026\/03\/05/);
+  assert.strictEqual(out.items[1].when, "2026/04/01");
+  assert.strictEqual(out.items[2].when, "2026/03/01 - 2026/03/05");
+  assert.doesNotMatch(out.items[1].detail, /^วันที่ /);
+  assert.doesNotMatch(out.items[2].detail, /^วันที่ /);
 });
 
 test("ช่วงวันที่เท่ากันไม่เขียนซ้ำสองรอบ", () => {
   const file = exportFile();
   file.profile.extracurricular[0].end_date = file.profile.extracurricular[0].start_date;
   const out = SiteImport.convert(file);
-  assert.match(out.items[2].detail, /^วันที่ 2026\/03\/01\n/);
+  assert.strictEqual(out.items[2].when, "2026/03/01");
 });
 
 test("ชั่วโมงเป็น string และ role ไปอยู่ช่องผลงาน", () => {

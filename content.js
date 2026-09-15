@@ -291,6 +291,7 @@
     ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "result", "award",
                 "rank", "placement"]],
     ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
+    ["link", ["ลิงก์", "ลิงค์", "ลิ้งก์", "url", "เว็บไซต์", "link"]],
   ];
 
   // ทุกแหล่งที่บอกได้ว่าช่องนี้คือช่องอะไร — ใช้จับคู่
@@ -389,12 +390,15 @@
     const parted = splitOrg(item.org);
     const values = {
       title: item.title,
-      org: parted.org,
+      // ของเก่าที่บันทึกก่อนมีช่อง when ยังเก็บเป็น "หน่วยงาน · ปี" อยู่
+      // จึงถอยไปใช้ splitOrg เฉพาะตอน when ว่างเท่านั้น
+      org: item.when ? item.org : parted.org,
       detail: item.detail,
-      year: parted.when,
+      year: item.when || parted.when,
       level: item.level || "",
       result: item.result || "",
       hours: item.hours || "",
+      link: item.link || "",
     };
 
     const all = candidateFields();
@@ -500,7 +504,7 @@
 
   const KIND_TH = {
     title: "ชื่อ", org: "หน่วยงาน", detail: "รายละเอียด", year: "ปี",
-    level: "ระดับ", result: "ผลรางวัล", hours: "ชั่วโมง",
+    level: "ระดับ", result: "ผลรางวัล", hours: "ชั่วโมง", link: "ลิงก์",
   };
 
   function showPlan(plan) {

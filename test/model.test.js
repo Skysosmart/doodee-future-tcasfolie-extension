@@ -337,3 +337,64 @@ test("mergeFolioItems ไม่แตะผลงานที่ไม่เก�
   assert.equal(out.items.length, 2);
   assert.equal(out.items[0].id, mine.id);
 });
+
+test("makeItem เก็บวันและเวลา กับลิงก์ เป็นช่องของตัวเอง", () => {
+  const item = M.makeItem({
+    type: "รางวัล / เกียรติบัตร",
+    title: "การแข่งขันสมมติ",
+    org: "สมาคมสมมติ",
+    when: "24 พ.ค. 2569",
+    link: "https://example.invalid/",
+    level: "ระดับชาติ",
+  });
+  assert.equal(item.when, "24 พ.ค. 2569");
+  assert.equal(item.link, "https://example.invalid/");
+  assert.equal(item.org, "สมาคมสมมติ");
+});
+
+test("normalize เติมช่องใหม่ให้ของเก่าที่ยังไม่มี แล้วบอกว่าต้องเขียนกลับ", () => {
+  const old = [
+    {
+      id: "a1",
+      type: "กิจกรรม",
+      title: "กิจกรรมสมมติ",
+      org: "โรงเรียนสมมติ",
+      level: "",
+      result: "",
+      hours: "",
+      detail: "",
+      tags: [],
+      createdAt: 1,
+    },
+  ];
+  const out = M.normalize(old);
+  assert.equal(out.items[0].when, "");
+  assert.equal(out.items[0].link, "");
+  assert.equal(out.changed, true, "ของเก่าต้องถูกเขียนกลับหนึ่งครั้ง");
+});
+
+test("normalize ที่ผ่านแล้วต้องนิ่ง ไม่เขียนกลับซ้ำ", () => {
+  const made = [M.makeItem({ type: "กิจกรรม", title: "ก" }, { id: "x", now: 1 })];
+  assert.equal(M.normalize(made).changed, false, "ลำดับ key ของ makeItem ต้องตรงกับ normalize");
+});
+
+test("filterItems ค้นเจอจากวันและเวลา และจากลิงก์", () => {
+  const items = M.normalize([
+    M.makeItem({ type: "กิจกรรม", title: "ก", when: "24 พ.ค. 2569" }, { id: "a", now: 1 }),
+    M.makeItem({ type: "กิจกรรม", title: "ข", link: "https://pranakorn.example/" }, { id: "b", now: 1 }),
+  ]).items;
+  assert.deepEqual(M.filterItems(items, { q: "2569" }).map((i) => i.id), ["a"]);
+  assert.deepEqual(M.filterItems(items, { q: "pranakorn" }).map((i) => i.id), ["b"]);
+});
+
+test("parseImport ยังอ่านไฟล์ backup เก่าที่ไม่มีช่องใหม่ได้", () => {
+  const text = JSON.stringify({
+    app: "doodee-future",
+    version: 1,
+    items: [{ id: "old1", type: "กิจกรรม", title: "ของเก่า", org: "โรงเรียนสมมติ", detail: "" }],
+  });
+  const { items } = M.parseImport(text);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].when, "");
+  assert.equal(items[0].link, "");
+});

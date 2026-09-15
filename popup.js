@@ -64,9 +64,11 @@ function readForm() {
     type: el("type").value,
     title: el("title").value,
     org: el("org").value,
+    when: el("when").value,
     level: el("level").value,
     result: el("result").value,
     hours: el("hours").value,
+    link: el("link").value,
     tags: el("tags").value,
     detail: el("detail").value,
   };
@@ -131,7 +133,7 @@ function resetForm() {
   }
   el("type").selectedIndex = 0;
   el("level").selectedIndex = 0;
-  for (const id of ["title", "org", "result", "hours", "tags", "detail"]) el(id).value = "";
+  for (const id of ["title", "org", "when", "result", "hours", "link", "tags", "detail"]) el(id).value = "";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
@@ -173,9 +175,11 @@ async function startEditing(item) {
   el("type").value = item.type;
   el("title").value = item.title;
   el("org").value = item.org;
+  el("when").value = item.when || "";
   el("level").value = item.level || "";
   el("result").value = item.result || "";
   el("hours").value = item.hours || "";
+  el("link").value = item.link || "";
   el("tags").value = Model.formatTags(item.tags);
   el("detail").value = item.detail;
   el("formHeading").textContent = "แก้ไขผลงาน";
