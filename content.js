@@ -288,26 +288,8 @@
   let lastFill = []; // [{ el, previous }] สำหรับปุ่มย้อนกลับ รองรับหลายช่องพร้อมกัน
   let pendingPlan = null; // แผนที่รอผู้ใช้ยืนยันก่อนเขียนลงฟอร์มจริง
 
-  // คำที่ใช้เดาว่าช่องนั้นคือช่องอะไร — ดูจาก label/placeholder/name/id
-  const FIELD_HINTS = [
-    ["title", ["ชื่อผลงาน", "ชื่อรางวัล", "ชื่อโครงงาน", "ชื่อกิจกรรม", "ชื่อหลักสูตร",
-               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject",
-               "free__title"]],
-    ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
-             "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
-             "provider", "agency", "school"]],
-    ["status", [...Model.STATUS_LABELS, "participation"]],
-    ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
-                "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
-                "essay", "reason", "free__body"]],
-    ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
-              "year", "date", "เมื่อ"]],
-    ["level", ["ระดับ", "level", "scope"]],
-    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "ผลการอบรม", "ผลตอบรับ",
-                "result", "award", "rank", "placement"]],
-    ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
-    ["link", ["ลิงก์", "ลิงค์", "ลิ้งก์", "url", "เว็บไซต์", "link"]],
-  ];
+  // คำใบ้ที่ใช้เดาว่าช่องนั้นคือช่องอะไร (FIELD_HINTS + การสแกน) อยู่ใน model.js แล้ว
+  // — เป็นตรรกะล้วน ๆ ทดสอบด้วย node --test ได้ตรง ๆ ที่นี่เหลือแค่ห่อด้วยส่วนที่ต้องพึ่ง DOM
 
   // ทุกแหล่งที่บอกได้ว่าช่องนี้คือช่องอะไร — ใช้จับคู่
   // ช่องของ TCASFolio เป็น contenteditable div ซึ่งไม่มี .placeholder แบบ input
@@ -368,12 +350,9 @@
   }
 
   function guessKind(el) {
-    const haystack = labelSources(el).join(" ").toLowerCase();
-    for (const [kind, words] of FIELD_HINTS) {
-      for (const w of words) {
-        if (haystack.includes(w.toLowerCase())) return kind;
-      }
-    }
+    const haystack = labelSources(el).join(" ");
+    const kind = Model.kindFromHaystack(haystack);
+    if (kind) return kind;
     // ไม่มีคำใบ้เลย — ช่องยาว ๆ เดาว่าเป็นรายละเอียด อย่างอื่นไม่เดา
     return el.tagName === "TEXTAREA" || el.isContentEditable ? "detail" : "";
   }
@@ -1138,7 +1117,8 @@
     // บล็อกของ TCASFolio ถูก React สร้างใหม่ทั้งก้อนหลังเกือบทุก action
     // (ปิดแผงแก้ไข, กดเพิ่มรูป, อัปโหลด) — reference ที่จับไว้หลุดทันที
     // จึงห้ามถือ element ไว้ข้าม await: หาใหม่จากหัวข้อทุกครั้งที่จะใช้
-    const live = () => blockFor(item);
+    // บล็อกที่มาจาก ＋ Inter มีหัวข้อภาษาอังกฤษ — ลองหาแบบไทยก่อน ไม่เจอค่อยลองแบบอังกฤษ
+    const live = () => blockFor(item) || (Model.hasEnglish(item) ? blockFor(Model.inEnglish(item)) : null);
 
     if (!live()) {
       showNote("ยังไม่มีบล็อกของผลงานนี้บนหน้า — เติมข้อความก่อน แล้วค่อยแนบรูป");
@@ -1333,7 +1313,7 @@
     const fillRow = document.createElement("div");
     fillRow.className = "fillrow";
 
-    // ปุ่มย่อยพับไว้ก่อน — บนการ์ดเหลือแค่สองปุ่มที่ใช้จริงทุกครั้ง
+    // ปุ่มย่อยพับไว้ก่อน — แถวหลักบนการ์ดเหลือแค่สามหรือสี่ปุ่มที่ใช้จริงทุกครั้ง
     const moreRow = document.createElement("div");
     moreRow.className = "fillrow more";
     moreRow.hidden = true;
@@ -1347,6 +1327,17 @@
       ["รายละเอียด", item.detail],
     ]) {
       if (value) moreRow.append(fillButton(item, what, value));
+    }
+    // ปุ่มเดิมสามปุ่มเขียนแต่ภาษาไทย — มีฉบับอังกฤษแล้วเพิ่มอีกชุดให้เลือกได้ ไม่ทับของเดิม
+    if (Model.hasEnglish(item)) {
+      const en = Model.inEnglish(item);
+      for (const [what, value] of [
+        ["ชื่อ · EN", en.title],
+        ["หน่วยงาน · EN", en.org],
+        ["รายละเอียด · EN", en.detail],
+      ]) {
+        if (value) moreRow.append(fillButton(item, what, value));
+      }
     }
 
     const newBtn = document.createElement("button");
@@ -1388,7 +1379,7 @@
 
     const allInterBtn = document.createElement("button");
     allInterBtn.type = "button";
-    allInterBtn.className = "fill fill-all";
+    allInterBtn.className = "fill fill-all fill-inter";
     allInterBtn.textContent = "เติมทั้งฟอร์ม · Inter";
     allInterBtn.title = "ใช้กับบล็อกที่มีอยู่แล้วและเลือกไว้ — เติมฉบับภาษาอังกฤษ";
     allInterBtn.addEventListener("click", () => {
