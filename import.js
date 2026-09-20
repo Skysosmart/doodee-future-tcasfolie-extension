@@ -153,6 +153,7 @@ async function readFile(file) {
     when: "",
     hours: "",
     result: "",
+    status: "",
     link: "",
     ...d,
     id: `draft-${i}`,
@@ -294,6 +295,14 @@ function draftCard(draft) {
     draft.result = resultField.value;
   });
 
+  const status = document.createElement("input");
+  status.type = "text";
+  status.value = draft.status || "";
+  status.placeholder = "เช่น ได้เข้าร่วมและส่งผลงาน";
+  status.addEventListener("input", () => {
+    draft.status = status.value;
+  });
+
   const hours = document.createElement("input");
   hours.type = "text";
   hours.value = draft.hours || "";
@@ -324,7 +333,8 @@ function draftCard(draft) {
     field("หน่วยงาน", org, true),
     field("วัน / ช่วงเวลา", when),
     field("ชั่วโมง", hours),
-    field("ผลรางวัล / สถานะ", resultField, true),
+    field("ผลรางวัล / ผลตอบรับ", resultField, true),
+    field("สถานะการเข้าร่วม", status, true),
     field("ลิงก์ผลงาน", link, true),
     field("รายละเอียด", detail, true),
   );
@@ -391,6 +401,7 @@ async function save() {
         when: d.when,
         level: d.level,
         result: d.result,
+        status: d.status,
         hours: d.hours,
         link: d.link,
         detail: d.detail,

@@ -148,3 +148,10 @@ test("ชิ้นที่ไม่มีหัวข้อถูกทิ้�
   file.profile.achievements.push({ id: "999", title: "   ", achievement_type: "academic" });
   assert.strictEqual(SiteImport.convert(file).items.length, 3);
 });
+
+test("ไฟล์ส่งออกของเว็บไม่มีสถานะ — ช่อง status ต้องว่าง ไม่ใช่ undefined", () => {
+  const out = SiteImport.convert(exportFile());
+  for (const entry of out.items) assert.strictEqual(entry.status, "");
+  // role ยังอยู่ช่องผลงานเหมือนเดิม ไม่ย้ายไป status
+  assert.strictEqual(out.items[2].result, "หัวหน้าทีม");
+});

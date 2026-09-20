@@ -67,6 +67,7 @@ function readForm() {
     when: el("when").value,
     level: el("level").value,
     result: el("result").value,
+    status: el("statusField").value,
     hours: el("hours").value,
     link: el("link").value,
     tags: el("tags").value,
@@ -133,7 +134,7 @@ function resetForm() {
   }
   el("type").selectedIndex = 0;
   el("level").selectedIndex = 0;
-  for (const id of ["title", "org", "when", "result", "hours", "link", "tags", "detail"]) el(id).value = "";
+  for (const id of ["title", "org", "when", "result", "statusField", "hours", "link", "tags", "detail"]) el(id).value = "";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
@@ -178,6 +179,7 @@ async function startEditing(item) {
   el("when").value = item.when || "";
   el("level").value = item.level || "";
   el("result").value = item.result || "";
+  el("statusField").value = item.status || "";
   el("hours").value = item.hours || "";
   el("link").value = item.link || "";
   el("tags").value = Model.formatTags(item.tags);
@@ -199,7 +201,7 @@ function itemCard(item) {
 
   const meta = document.createElement("div");
   meta.className = "item-meta";
-  const extras = [item.level, item.result].filter(Boolean).join(" · ");
+  const extras = [item.level, item.result, item.status].filter(Boolean).join(" · ");
   meta.textContent = [item.type, item.org, extras].filter(Boolean).join(" · ");
 
   box.append(title, meta);

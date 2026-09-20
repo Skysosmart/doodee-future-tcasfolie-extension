@@ -100,3 +100,13 @@ test("ตอบ 200 แต่ว่างเปล่า ต้องไม่�
 test("ไม่ใช่ JSON ต้องบอกตรง ๆ", () => {
   assert.throws(() => Analysis.parseAnalysis("<html>login</html>"), /ไม่ใช่ JSON/);
 });
+
+test("ข้อความที่ส่งไปวิเคราะห์มีสถานะการเข้าร่วม", () => {
+  const text = Analysis.itemToText(item({ result: "", status: "ได้เข้าร่วมและส่งผลงาน" }));
+  assert.match(text, /สถานะการเข้าร่วม: ได้เข้าร่วมและส่งผลงาน/);
+});
+
+test("ไม่มีสถานะก็ไม่ต้องมีบรรทัดเปล่า", () => {
+  const text = Analysis.itemToText(item({ status: "" }));
+  assert.doesNotMatch(text, /สถานะการเข้าร่วม/);
+});

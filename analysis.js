@@ -19,6 +19,7 @@
       line("ช่วงเวลา", item.when),
       line("ระดับ", item.level),
       line("ผลงาน", item.result),
+      line("สถานะการเข้าร่วม", item.status),
       line("ชั่วโมง", item.hours),
       line("ลิงก์", item.link),
     ].filter(Boolean);
