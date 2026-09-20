@@ -512,6 +512,18 @@ el("welcomeImport").addEventListener("click", openBackupPage);
 // แปลเป็นอังกฤษ — ขอ "ร่าง" จาก doodee-future.com แล้วให้ผู้ใช้ตรวจแก้เอง
 // ไม่บันทึกให้อัตโนมัติ: ข้อความนี้กำลังจะไปอยู่ในใบสมัครจริง
 const TRANSLATE_PATH = "/api/extension/translate";
+
+// ชื่อไทย + ขีดจำกัดตัวอักษรของแต่ละช่อง — ต้องตรงกับ FIELD_LIMITS ฝั่ง doodee-future.com
+// (route ตอบ { error: "too_long", field }) เพื่อบอกได้ว่าช่องไหนยาวเกิน ไม่ใช่เดาว่าเป็นรายละเอียดเสมอ
+const TRANSLATE_FIELD_INFO = {
+  title: { label: "ชื่อผลงาน", limit: 300 },
+  org: { label: "หน่วยงาน", limit: 300 },
+  when: { label: "วัน / ช่วงเวลา", limit: 300 },
+  result: { label: "ผลรางวัล / ผลตอบรับ", limit: 300 },
+  status: { label: "สถานะการเข้าร่วม", limit: 300 },
+  detail: { label: "รายละเอียด", limit: 4000 },
+};
+
 let translating = false;
 let translateToken = 0;
 let translateArmed = false;
@@ -551,24 +563,31 @@ el("translateBtn").addEventListener("click", async () => {
   el("enMsg").textContent = "กำลังแปล… (ใช้เวลาราว 10-30 วินาที)";
 
   try {
+    // หกช่องตาม Model.EN_FIELDS — สร้างจากลิสต์เดียวกับที่เว็บใช้ยืนยัน (TRANSLATE_FIELDS มีเทสต์ปักไว้)
+    // แทนที่จะพิมพ์ทีละช่อง กันหลุดตกช่องหรือสะกดชื่อคีย์ผิดโดยไม่มีอะไรเตือน
     const res = await SiteCall.request(TRANSLATE_PATH, {
       method: "POST",
-      body: {
-        title: fields.title,
-        org: fields.org,
-        when: fields.when,
-        result: fields.result,
-        status: fields.status,
-        detail: fields.detail,
-      },
+      body: Object.fromEntries(Model.EN_FIELDS.map((k) => [k, fields[k]])),
     });
 
     const now = { token: translateToken, formSession, editingId };
     if (!Model.shouldApplyTranslation(sent, now)) return; // ไปฟอร์มอื่นแล้ว ทิ้งผลนี้
     if (!res.ok) {
       let why = SiteCall.explain(res.status);
-      if (res.status === 400 && /too_long/.test(res.text || "")) {
-        why = "ข้อความยาวเกินไปสำหรับการแปล — ย่อรายละเอียดลงแล้วลองใหม่";
+      if (res.status === 400) {
+        // route ตอบ { error: "too_long", field } — res.text อาจไม่ใช่ JSON เลยก็ได้ (เช่นหน้า error อื่น)
+        let errData = null;
+        try {
+          errData = JSON.parse(res.text || "");
+        } catch (error) {
+          errData = null;
+        }
+        if (errData && errData.error === "too_long") {
+          const info = TRANSLATE_FIELD_INFO[errData.field];
+          why = info
+            ? `ข้อความยาวเกินไปสำหรับการแปล (${info.label}) — ย่อลงให้ไม่เกิน ${info.limit} ตัวอักษร แล้วลองใหม่`
+            : "ข้อความยาวเกินไปสำหรับการแปล — ย่อลงแล้วลองใหม่";
+        }
       }
       if (res.status === 502) why = "ระบบแปลตอบกลับมาไม่ครบ ลองกดอีกครั้ง";
       throw new Error(why);
