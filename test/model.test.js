@@ -443,3 +443,91 @@ test("ป้ายกำกับของแฟ้มอยู่ที่ Mode
   assert.deepEqual(M.STATUS_LABELS, ["สถานะการเข้าร่วม"]);
   assert.deepEqual(M.RESULT_LABELS, ["ผลรางวัล / อันดับ", "ผลการอบรม", "ผลตอบรับ / รางวัล"]);
 });
+
+test("normalizeEn คืนหกช่องเสมอ และทิ้งคีย์แปลกปลอม", () => {
+  const en = M.normalizeEn({ title: " Science Camp ", nope: "x", detail: 5 });
+  assert.deepEqual(Object.keys(en), ["title", "org", "when", "result", "status", "detail"]);
+  assert.equal(en.title, "Science Camp");
+  assert.equal(en.detail, "", "ค่าที่ไม่ใช่สตริงต้องกลายเป็นว่าง");
+  assert.deepEqual(M.normalizeEn(null), {
+    title: "", org: "", when: "", result: "", status: "", detail: "",
+  });
+});
+
+test("normalize เติม en ให้ของเก่า แล้วยังนิ่งเมื่อผ่านรอบสอง", () => {
+  const old = [{ id: "a1", type: "กิจกรรม", title: "ของเก่า", detail: "" }];
+  const once = M.normalize(old);
+  assert.deepEqual(Object.keys(once.items[0].en), M.EN_FIELDS);
+  assert.equal(once.changed, true);
+  assert.equal(M.normalize(once.items).changed, false, "ลำดับ key ของ makeItem/normalize ต้องตรงกัน");
+});
+
+test("hasEnglish ดูที่หัวข้ออังกฤษ", () => {
+  const blank = M.makeItem({ type: "กิจกรรม", title: "ก" });
+  assert.equal(M.hasEnglish(blank), false);
+  const done = M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "A" } });
+  assert.equal(M.hasEnglish(done), true);
+});
+
+test("inEnglish สลับหกช่อง และไม่ถอยไปใช้ภาษาไทย", () => {
+  const item = M.makeItem({
+    type: "กิจกรรม",
+    title: "ค่ายสมมติ",
+    org: "โรงเรียนสมมติ",
+    when: "24 พ.ค. 2569",
+    result: "",
+    status: "ได้เข้าร่วมและส่งผลงาน",
+    detail: "รายละเอียดภาษาไทย",
+    level: "ระดับชาติ",
+    hours: "48",
+    en: {
+      title: "Imaginary Camp",
+      org: "Imaginary School",
+      when: "24 May 2026",
+      status: "Participated and submitted work",
+      detail: "",
+    },
+  });
+  const out = M.inEnglish(item);
+  assert.equal(out.title, "Imaginary Camp");
+  assert.equal(out.when, "24 May 2026");
+  assert.equal(out.status, "Participated and submitted work");
+  assert.equal(out.detail, "", "ช่องที่ยังไม่ได้แปลต้องว่าง ห้ามคืนข้อความไทย");
+  assert.equal(out.level, "ระดับชาติ", "ระดับใช้ค่าไทยของเว็บเหมือนเดิม");
+  assert.equal(out.hours, "48");
+});
+
+test("filterItems กรองเฉพาะชิ้นที่มีฉบับอังกฤษ และค้นจากข้อความอังกฤษได้", () => {
+  const items = M.normalize([
+    M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "Robotics Club" } }, { id: "a", now: 1 }),
+    M.makeItem({ type: "กิจกรรม", title: "ข" }, { id: "b", now: 1 }),
+  ]).items;
+  assert.deepEqual(M.filterItems(items, { inter: true }).map((i) => i.id), ["a"]);
+  assert.deepEqual(M.filterItems(items, { q: "robotics" }).map((i) => i.id), ["a"]);
+});
+
+test("นำเข้าไฟล์ที่ไม่มีฉบับอังกฤษ ต้องไม่ลบฉบับอังกฤษที่มีอยู่", () => {
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "Mine" } }, { id: "x", now: 1 });
+  const incoming = M.makeItem({ type: "กิจกรรม", title: "ก แก้แล้ว" }, { id: "x", now: 1 });
+  const out = M.mergeImport([mine], [incoming]);
+  assert.equal(out.items[0].title, "ก แก้แล้ว");
+  assert.equal(out.items[0].en.title, "Mine", "ซิงก์จากเว็บทับฉบับอังกฤษไม่ได้");
+
+  const newer = M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "Newer" } }, { id: "x", now: 1 });
+  assert.equal(M.mergeImport([mine], [newer]).items[0].en.title, "Newer", "ไฟล์ที่มีอังกฤษมาต้องทับได้");
+});
+
+test("นำเข้าอัตโนมัติจากแฟ้มต้องไม่ลบฉบับอังกฤษ", () => {
+  const mine = M.makeItem({ type: "รางวัล / เกียรติบัตร", title: "เหรียญทอง", en: { title: "Gold medal" } });
+  const out = M.mergeFolioItems([mine], M.folioToItems({ awards: [{ title: "เหรียญทอง", description: "แก้แล้ว" }] }));
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].detail, "แก้แล้ว");
+  assert.equal(out.items[0].en.title, "Gold medal");
+});
+
+test("ส่งออกแล้วนำเข้ากลับ ฉบับอังกฤษต้องครบ", () => {
+  const items = [M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "A", detail: "B" } }, { id: "x", now: 1 })];
+  const { items: back } = M.parseImport(JSON.stringify(M.toExport(items, 1)));
+  assert.equal(back[0].en.title, "A");
+  assert.equal(back[0].en.detail, "B");
+});

@@ -59,6 +59,35 @@
     return normalizeTags(tags).join(", ");
   }
 
+  // ฉบับภาษาอังกฤษของผลงานชิ้นเดียวกัน — ใช้ตอนลงแฟ้มหลักสูตรอินเตอร์
+  // ระดับ/หมวด/ชั่วโมง/ลิงก์/แท็ก/รูป ใช้ร่วมกัน ไม่ต้องแปล
+  // (ตัวเลือก "ระดับ" ของ TCASFolio เป็นภาษาไทยทุกแฟ้ม แปลแล้วจะหาตัวเลือกไม่เจอ)
+  const EN_FIELDS = ["title", "org", "when", "result", "status", "detail"];
+
+  function normalizeEn(value) {
+    const src = value && typeof value === "object" ? value : {};
+    const out = {};
+    for (const key of EN_FIELDS) out[key] = str(src[key]);
+    return out;
+  }
+
+  function isEmptyEn(en) {
+    return EN_FIELDS.every((key) => !str(en && en[key]));
+  }
+
+  function hasEnglish(item) {
+    return !!(item && item.en && str(item.en.title));
+  }
+
+  // ห้ามถอยไปใช้ภาษาไทยเมื่อช่องอังกฤษว่าง — ข้อความไทยที่หลุดลงแฟ้มอินเตอร์
+  // คือสิ่งที่ฟีเจอร์นี้มีไว้กัน ปล่อยว่างแล้วคนกรอกเห็นเองดีกว่า
+  function inEnglish(item) {
+    const en = normalizeEn(item && item.en);
+    const out = { ...item };
+    for (const key of EN_FIELDS) out[key] = en[key];
+    return out;
+  }
+
   function makeItem(fields, options) {
     const opts = options || {};
     return {
@@ -74,6 +103,7 @@
       link: str(fields.link),
       detail: str(fields.detail),
       tags: normalizeTags(fields.tags),
+      en: normalizeEn(fields.en),
       createdAt: Number.isFinite(opts.now) ? opts.now : Date.now(),
     };
   }
@@ -99,6 +129,7 @@
         link: str(entry.link),
         detail: str(entry.detail),
         tags: normalizeTags(entry.tags),
+        en: normalizeEn(entry.en),
         createdAt: Number.isFinite(entry.createdAt) ? entry.createdAt : 0,
       }));
     // เทียบทั้งก้อน รวมลำดับ key ด้วย — ของที่ normalize แล้วจะได้ false เสมอ
@@ -126,11 +157,15 @@
       .toLowerCase()
       .split(/\s+/)
       .filter(Boolean);
+    const interOnly = !!(criteria && criteria.inter);
     return items.filter((entry) => {
       if (type && entry.type !== type) return false;
       if (tag && !entry.tags.includes(tag)) return false;
+      if (interOnly && !hasEnglish(entry)) return false;
       if (!words.length) return true;
-      const hay = [entry.title, entry.org, entry.when, entry.result, entry.status, entry.link, entry.detail, entry.tags.join(" ")]
+      const en = normalizeEn(entry.en);
+      const hay = [entry.title, entry.org, entry.when, entry.result, entry.status, entry.link, entry.detail,
+                   entry.tags.join(" "), ...EN_FIELDS.map((key) => en[key])]
         .join(" ")
         .toLowerCase();
       return words.every((w) => hay.includes(w));
@@ -221,9 +256,14 @@
       if (seen.has(raw.id)) redone += 1;
       seen.add(raw.id);
 
-      if (items.some((entry) => entry.id === item.id)) updated += 1;
+      const current = items.find((entry) => entry.id === item.id);
+      // ของที่ดึงจากเว็บ/แฟ้ม/PDF ไม่เคยมีฉบับอังกฤษมาด้วย ถ้าปล่อยให้ทับ
+      // ฉบับอังกฤษจะหายทุกครั้งที่ซิงก์ — ว่างแปลว่า "ไม่รู้" ไม่ใช่ "ลบ"
+      const next = current && isEmptyEn(item.en) ? { ...item, en: current.en } : item;
+
+      if (current) updated += 1;
       else added += 1;
-      items = upsert(items, item);
+      items = upsert(items, next);
     }
     return { items, added, updated, redone };
   }
@@ -309,7 +349,13 @@
         (old) => old.type === entry.item.type && old.title === entry.item.title,
       );
       const item = match
-        ? { ...entry.item, id: match.id, createdAt: match.createdAt, tags: match.tags }
+        ? {
+            ...entry.item,
+            id: match.id,
+            createdAt: match.createdAt,
+            tags: match.tags,
+            en: isEmptyEn(entry.item.en) ? match.en : entry.item.en,
+          }
         : entry.item;
       if (match) updated += 1;
       else added += 1;
@@ -328,6 +374,11 @@
     newId,
     normalizeTags,
     formatTags,
+    EN_FIELDS,
+    normalizeEn,
+    isEmptyEn,
+    hasEnglish,
+    inEnglish,
     makeItem,
     normalize,
     upsert,
