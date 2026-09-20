@@ -290,7 +290,7 @@ function draftCard(draft) {
   const resultField = document.createElement("input");
   resultField.type = "text";
   resultField.value = draft.result || "";
-  resultField.placeholder = "เช่น เหรียญทอง, เข้าร่วม";
+  resultField.placeholder = "เช่น เหรียญทอง, Completed";
   resultField.addEventListener("input", () => {
     draft.result = resultField.value;
   });
