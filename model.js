@@ -366,6 +366,8 @@
             id: match.id,
             createdAt: match.createdAt,
             tags: match.tags,
+            // สถานะที่ผู้ใช้พิมพ์เอง — แฟ้มบนเว็บไม่ได้ส่งค่านี้มา จึงห้ามล้างทิ้งตอนนำเข้าซ้ำ
+            status: str(entry.item.status) ? entry.item.status : match.status,
             en: isEmptyEn(entry.item.en) ? match.en : entry.item.en,
           }
         : entry.item;

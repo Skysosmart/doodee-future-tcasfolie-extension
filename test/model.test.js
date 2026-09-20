@@ -525,6 +525,15 @@ test("นำเข้าอัตโนมัติจากแฟ้มต้�
   assert.equal(out.items[0].en.title, "Gold medal");
 });
 
+test("นำเข้าอัตโนมัติจากแฟ้มต้องไม่ลบสถานะที่ผู้ใช้พิมพ์เอง", () => {
+  // folioToItems ไม่เคยเติม status ให้ (เว็บไม่ส่งค่านี้มา) — สถานะที่พิมพ์เองต้องรอดจากการนำเข้าซ้ำ
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ค่ายทดสอบ", status: "เข้าร่วมครบ" });
+  const out = M.mergeFolioItems([mine], M.folioToItems({ activities: [{ title: "ค่ายทดสอบ", description: "แก้แล้ว" }] }));
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].detail, "แก้แล้ว");
+  assert.equal(out.items[0].status, "เข้าร่วมครบ");
+});
+
 test("ส่งออกแล้วนำเข้ากลับ ฉบับอังกฤษต้องครบ", () => {
   const items = [M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "A", detail: "B" } }, { id: "x", now: 1 })];
   const { items: back } = M.parseImport(JSON.stringify(M.toExport(items, 1)));
