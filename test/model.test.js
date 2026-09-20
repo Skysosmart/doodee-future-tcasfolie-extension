@@ -534,6 +534,18 @@ test("นำเข้าอัตโนมัติจากแฟ้มต้�
   assert.equal(out.items[0].status, "เข้าร่วมครบ");
 });
 
+test("นำเข้าอัตโนมัติจากแฟ้มต้องไม่ลบจำนวนชั่วโมงที่ผู้ใช้พิมพ์เอง", () => {
+  // folioToItems เติม hours: "" ให้เสมอ (เว็บไม่ส่งค่านี้มา) — ของที่พิมพ์เองต้องรอดจากการนำเข้าซ้ำ
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ค่ายทดสอบชั่วโมง", hours: "12" });
+  const out = M.mergeFolioItems(
+    [mine],
+    M.folioToItems({ activities: [{ title: "ค่ายทดสอบชั่วโมง", description: "แก้แล้ว" }] }),
+  );
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].detail, "แก้แล้ว");
+  assert.equal(out.items[0].hours, "12");
+});
+
 test("ส่งออกแล้วนำเข้ากลับ ฉบับอังกฤษต้องครบ", () => {
   const items = [M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "A", detail: "B" } }, { id: "x", now: 1 })];
   const { items: back } = M.parseImport(JSON.stringify(M.toExport(items, 1)));
@@ -559,4 +571,20 @@ test("shouldApplyTranslation ปฏิเสธเมื่อ formSession ข�
 test("shouldApplyTranslation ปฏิเสธเมื่อสลับไปแก้ชิ้นอื่น (editingId เปลี่ยน)", () => {
   const sent = { token: 1, formSession: 1, editingId: "a" };
   assert.equal(M.shouldApplyTranslation(sent, { token: 1, formSession: 1, editingId: "b" }), false);
+});
+
+// guessKind ของ content.js ห่อ kindFromHaystack ตัวนี้ไว้ชั้นเดียว (ส่วนที่เหลือพึ่ง DOM
+// เทสต์ตรงนี้ไม่ได้) — ลำดับการสแกนใน FIELD_HINTS คือส่วนที่เคยไม่มีเทสต์คลุมเลย
+test("kindFromHaystack จับป้ายจริงห้าแบบได้ถูกชนิด", () => {
+  assert.equal(M.kindFromHaystack("สถานะการเข้าร่วม"), "status");
+  assert.equal(M.kindFromHaystack("ผลการอบรม"), "result");
+  assert.equal(M.kindFromHaystack("ผลตอบรับ / รางวัล"), "result");
+  assert.equal(M.kindFromHaystack("ผลรางวัล / อันดับ"), "result");
+  assert.equal(M.kindFromHaystack("รายละเอียด"), "detail");
+});
+
+test("kindFromHaystack: คำใบ้ของ org (สถาบัน) ต้องไม่ไปจับ สถานะการเข้าร่วม", () => {
+  // ถ้าเรียงผิดจน org แซงหน้า status การเปลี่ยนลำดับ FIELD_HINTS ครั้งต่อไปจะพังแบบเงียบ ๆ
+  assert.equal("สถานะการเข้าร่วม".includes("สถาบัน"), false, "สมมติฐานของเทสต์นี้: ไม่ใช่ substring กันเอง");
+  assert.equal(M.kindFromHaystack("สถานะการเข้าร่วม"), "status");
 });

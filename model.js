@@ -32,6 +32,44 @@
 
   const EXPORT_VERSION = 1;
 
+  // คำที่ใช้เดาว่าช่องบนหน้าเว็บคือช่องอะไร — ดูจาก label/placeholder/name/id
+  // อยู่ที่นี่ (ไม่ใช่ content.js) เพราะเป็นตรรกะล้วน ๆ ทดสอบด้วย node --test ได้ตรง ๆ
+  // ลำดับมีผล: ตัวที่จับคู่ก่อนชนะ เช่น "status" ต้องมาก่อน "result" เพราะข้อความ
+  // อย่าง "ผลการอบรม"/"ผลตอบรับ / รางวัล" อยู่ใน RESULT_LABELS แต่ "สถานะการเข้าร่วม"
+  // ต้องไม่ไปโดนคำใบ้ของ "org" (เช่น "สถาบัน") จับก่อนเช่นกัน
+  const FIELD_HINTS = [
+    ["title", ["ชื่อผลงาน", "ชื่อรางวัล", "ชื่อโครงงาน", "ชื่อกิจกรรม", "ชื่อหลักสูตร",
+               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject",
+               "free__title"]],
+    ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
+             "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
+             "provider", "agency", "school"]],
+    ["status", [...STATUS_LABELS, "participation"]],
+    ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
+                "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
+                "essay", "reason", "free__body"]],
+    ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
+              "year", "date", "เมื่อ"]],
+    ["level", ["ระดับ", "level", "scope"]],
+    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "ผลการอบรม", "ผลตอบรับ",
+                "result", "award", "rank", "placement"]],
+    ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
+    ["link", ["ลิงก์", "ลิงค์", "ลิ้งก์", "url", "เว็บไซต์", "link"]],
+  ];
+
+  // สแกน haystack (label/placeholder/name/id ต่อกันเป็นสตริงเดียว) หาคำใบ้แรกที่ตรง
+  // เป็นส่วนที่ทดสอบได้ล้วน ๆ — ส่วนที่ต้องพึ่ง DOM (fallback เดาจาก tag) อยู่ที่
+  // guessKind ใน content.js แทน
+  function kindFromHaystack(text) {
+    const haystack = String(text || "").toLowerCase();
+    for (const [kind, words] of FIELD_HINTS) {
+      for (const w of words) {
+        if (haystack.includes(w.toLowerCase())) return kind;
+      }
+    }
+    return "";
+  }
+
   function str(value) {
     return typeof value === "string" ? value.trim() : "";
   }
@@ -368,6 +406,8 @@
             tags: match.tags,
             // สถานะที่ผู้ใช้พิมพ์เอง — แฟ้มบนเว็บไม่ได้ส่งค่านี้มา จึงห้ามล้างทิ้งตอนนำเข้าซ้ำ
             status: str(entry.item.status) ? entry.item.status : match.status,
+            // จำนวนชั่วโมงก็เหมือนกัน — folioToItems เติม "" ให้เสมอเพราะเว็บไม่ส่งมา
+            hours: str(entry.item.hours) ? entry.item.hours : match.hours,
             en: isEmptyEn(entry.item.en) ? match.en : entry.item.en,
           }
         : entry.item;
@@ -384,6 +424,8 @@
     LEVELS,
     STATUS_LABELS,
     RESULT_LABELS,
+    FIELD_HINTS,
+    kindFromHaystack,
     EXPORT_VERSION,
     newId,
     normalizeTags,
