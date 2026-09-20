@@ -6,6 +6,27 @@ const el = (id) => document.getElementById(id);
 let editingId = null; // null = กำลังเพิ่มใหม่, มีค่า = กำลังแก้ไขชิ้นนั้น
 let statusTimer = null;
 
+// ช่องฉบับอังกฤษ — คีย์ตรงกับ Model.EN_FIELDS
+const EN_INPUTS = {
+  title: "enTitle",
+  org: "enOrg",
+  when: "enWhen",
+  result: "enResult",
+  status: "enStatus",
+  detail: "enDetail",
+};
+
+function readEn() {
+  const out = {};
+  for (const [key, id] of Object.entries(EN_INPUTS)) out[key] = el(id).value;
+  return out;
+}
+
+function writeEn(en) {
+  const clean = Model.normalizeEn(en);
+  for (const [key, id] of Object.entries(EN_INPUTS)) el(id).value = clean[key];
+}
+
 function showStatus(message, isError) {
   const status = el("status");
   status.textContent = message;
@@ -72,6 +93,7 @@ function readForm() {
     link: el("link").value,
     tags: el("tags").value,
     detail: el("detail").value,
+    en: readEn(),
   };
 }
 
@@ -135,6 +157,10 @@ function resetForm() {
   el("type").selectedIndex = 0;
   el("level").selectedIndex = 0;
   for (const id of ["title", "org", "when", "result", "statusField", "hours", "link", "tags", "detail"]) el(id).value = "";
+  writeEn({});
+  el("enBox").open = false;
+  el("enMsg").textContent = "";
+  el("translateBtn").textContent = "แปลเป็นอังกฤษ";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
@@ -184,6 +210,10 @@ async function startEditing(item) {
   el("link").value = item.link || "";
   el("tags").value = Model.formatTags(item.tags);
   el("detail").value = item.detail;
+  writeEn(item.en);
+  // เปิดกล่องให้เองเมื่อชิ้นนี้มีฉบับอังกฤษแล้ว จะได้เห็นว่ามีอยู่
+  el("enBox").open = Model.hasEnglish(item);
+  el("enMsg").textContent = "";
   el("formHeading").textContent = "แก้ไขผลงาน";
   el("saveBtn").textContent = "อัปเดต";
   el("cancelBtn").hidden = false;
@@ -198,6 +228,13 @@ function itemCard(item) {
   const title = document.createElement("div");
   title.className = "item-title";
   title.textContent = item.title;
+
+  if (Model.hasEnglish(item)) {
+    const badge = document.createElement("span");
+    badge.className = "en-badge";
+    badge.textContent = "EN";
+    title.appendChild(badge);
+  }
 
   const meta = document.createElement("div");
   meta.className = "item-meta";
@@ -458,6 +495,85 @@ el("analyseBtn").addEventListener("click", () => {
 
 el("importBtn").addEventListener("click", openBackupPage);
 el("welcomeImport").addEventListener("click", openBackupPage);
+
+// แปลเป็นอังกฤษ — ขอ "ร่าง" จาก doodee-future.com แล้วให้ผู้ใช้ตรวจแก้เอง
+// ไม่บันทึกให้อัตโนมัติ: ข้อความนี้กำลังจะไปอยู่ในใบสมัครจริง
+const TRANSLATE_PATH = "/api/extension/translate";
+let translating = false;
+let translateToken = 0;
+let translateArmed = false;
+let translateArmTimer = null;
+
+function disarmTranslate() {
+  translateArmed = false;
+  clearTimeout(translateArmTimer);
+  el("translateBtn").textContent = "แปลเป็นอังกฤษ";
+}
+
+el("translateBtn").addEventListener("click", async () => {
+  if (translating) return;
+  const fields = readForm();
+  if (!fields.title.trim()) {
+    el("enMsg").textContent = "ใส่ชื่อผลงาน (ภาษาไทย) ก่อนถึงจะแปลได้";
+    el("title").focus();
+    return;
+  }
+
+  // มีฉบับอังกฤษอยู่แล้ว ต้องถามก่อนทับ — จังหวะเดียวกับปุ่มลบ
+  if (!translateArmed && !Model.isEmptyEn(readEn())) {
+    translateArmed = true;
+    el("translateBtn").textContent = "แทนที่ฉบับอังกฤษเดิม?";
+    translateArmTimer = setTimeout(disarmTranslate, 3000);
+    return;
+  }
+  disarmTranslate();
+
+  // ผู้ใช้อาจกดไปแก้ชิ้นอื่นระหว่างรอ — ผลที่มาช้าห้ามลงช่องของชิ้นใหม่
+  const token = (translateToken += 1);
+  const editingWhenSent = editingId;
+  translating = true;
+  el("translateBtn").disabled = true;
+  el("enMsg").textContent = "กำลังแปล… (ใช้เวลาราว 10-30 วินาที)";
+
+  try {
+    const res = await SiteCall.request(TRANSLATE_PATH, {
+      method: "POST",
+      body: {
+        title: fields.title,
+        org: fields.org,
+        when: fields.when,
+        result: fields.result,
+        status: fields.status,
+        detail: fields.detail,
+      },
+    });
+
+    if (token !== translateToken || editingId !== editingWhenSent) return; // ไปชิ้นอื่นแล้ว ทิ้งผลนี้
+    if (!res.ok) {
+      let why = SiteCall.explain(res.status);
+      if (res.status === 400 && /too_long/.test(res.text || "")) {
+        why = "ข้อความยาวเกินไปสำหรับการแปล — ย่อรายละเอียดลงแล้วลองใหม่";
+      }
+      if (res.status === 502) why = "ระบบแปลตอบกลับมาไม่ครบ ลองกดอีกครั้ง";
+      throw new Error(why);
+    }
+    if (SiteCall.looksLikeHtml(res.text)) {
+      throw new Error("เว็บส่ง HTML กลับมาแทน JSON — น่าจะเด้งไปหน้าล็อกอิน");
+    }
+
+    const data = JSON.parse(res.text);
+    writeEn(data && data.en);
+    el("enBox").open = true;
+    el("enMsg").textContent = "ได้ร่างแล้ว — ตรวจแก้ แล้วกด บันทึก/อัปเดต";
+  } catch (error) {
+    if (token === translateToken) el("enMsg").textContent = `แปลไม่สำเร็จ: ${error.message}`;
+  } finally {
+    if (token === translateToken) {
+      translating = false;
+      el("translateBtn").disabled = false;
+    }
+  }
+});
 
 fillTypeOptions();
 fillLevelOptions();
