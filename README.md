@@ -131,7 +131,7 @@ git clone https://github.com/Skysosmart/doodee-future.git
 | `นำเข้าอัตโนมัติ` | **ออก** | GET รูปของเจ้าตัวเองจาก S3 ของ TCAS ตาม presigned URL ที่เว็บได้มา (ไม่มี body) |
 
 - ขอสิทธิ์แค่ `storage` + `unlimitedStorage` · host permission:
-  `student.mytcas.com` (เติมฟอร์ม) · `doodee-future.com` (ซิงก์/วิเคราะห์) ·
+  `student.mytcas.com` (เติมฟอร์ม) · `doodee-future.com` (ซิงก์/วิเคราะห์/แปล) ·
   `tcas65.as.r.appspot.com` + `tcas70.s3.ap-southeast-1.amazonaws.com` (นำเข้าอัตโนมัติ)
 - `interceptor.js` อ่านคำขอ/คำตอบของเว็บใน main world แต่ **ไม่ยิงคำขอของตัวเองสักตัว**
   ไม่เขียนลงดิสก์ — ส่งต่อให้แผงผ่าน `postMessage` เท่านั้น และไม่แตะ `/applicants/me` หรือเลขบัตรประชาชนเลย
