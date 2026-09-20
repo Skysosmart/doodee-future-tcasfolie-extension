@@ -15,6 +15,7 @@
   let activeType = "";
   let activeTag = "";
   let query = "";
+  let interOnly = false;
   // เริ่มที่ย่อไว้เสมอ — panel ลอย fixed ทับปุ่มของใบสมัครจริงได้
   // (วัดแล้ว: elementFromPoint บนปุ่มชิดขอบขวาคืน host ตัวนี้ ไม่ใช่ปุ่ม)
   // ถ้าผู้ใช้เคยกางไว้ ค่าใน storage จะมากางให้เองตอน init
@@ -195,6 +196,18 @@
   typeBar.className = "typebar";
 
   function renderTypeBar() {
+    const interChip = document.createElement("button");
+    interChip.type = "button";
+    interChip.className = "chip" + (interOnly ? " is-active" : "");
+    interChip.setAttribute("aria-pressed", String(interOnly));
+    interChip.textContent = "Inter";
+    interChip.title = "เฉพาะผลงานที่มีฉบับภาษาอังกฤษ";
+    interChip.addEventListener("click", () => {
+      interOnly = !interOnly;
+      renderTypeBar();
+      renderList();
+    });
+
     typeBar.replaceChildren(
       ...["", ...Model.TYPES].map((type) => {
         const chip = document.createElement("button");
@@ -210,6 +223,7 @@
         });
         return chip;
       }),
+      interChip,
       tagToggle,
     );
   }
@@ -1278,6 +1292,7 @@
     const pills = [
       [item.type ? item.type.split(" / ")[0] : "", ""],
       [item.level, "is-level"],
+      [Model.hasEnglish(item) ? "EN" : "", "is-en"],
       [item.result, ""],
       [item.status, ""],
       [imgCount ? `🖼 ${imgCount} รูป` : "", "is-img"],
@@ -1342,6 +1357,20 @@
     newBtn.addEventListener("click", () => { createBlockThenPlan(item, newBtn); });
     fillRow.append(newBtn);
 
+    const interBtn = document.createElement("button");
+    interBtn.type = "button";
+    interBtn.className = "fill fill-inter";
+    interBtn.textContent = "＋ Inter";
+    interBtn.title = "ลงพอร์ตด้วยฉบับภาษาอังกฤษ (หลักสูตรอินเตอร์)";
+    interBtn.addEventListener("click", () => {
+      if (!Model.hasEnglish(item)) {
+        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › แปลเป็นอังกฤษ ก่อน");
+        return;
+      }
+      createBlockThenPlan(Model.inEnglish(item), interBtn);
+    });
+    fillRow.append(interBtn);
+
     const allBtn = document.createElement("button");
     allBtn.type = "button";
     allBtn.className = "fill fill-all";
@@ -1356,6 +1385,25 @@
       showPlan(plan); // ยังไม่เขียนอะไรทั้งนั้น รอกดยืนยันก่อน
     });
     moreRow.append(allBtn);
+
+    const allInterBtn = document.createElement("button");
+    allInterBtn.type = "button";
+    allInterBtn.className = "fill fill-all";
+    allInterBtn.textContent = "เติมทั้งฟอร์ม · Inter";
+    allInterBtn.title = "ใช้กับบล็อกที่มีอยู่แล้วและเลือกไว้ — เติมฉบับภาษาอังกฤษ";
+    allInterBtn.addEventListener("click", () => {
+      if (!Model.hasEnglish(item)) {
+        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › แปลเป็นอังกฤษ ก่อน");
+        return;
+      }
+      const plan = buildPlan(Model.inEnglish(item));
+      if (!plan.length) {
+        showNote("ไม่เจอช่องที่เติมได้บนหน้านี้ — เปิดฟอร์มเพิ่มผลงานก่อน แล้วค่อยกด");
+        return;
+      }
+      showPlan(plan);
+    });
+    moreRow.append(allInterBtn);
 
     const n = imageCounts[item.id] || 0;
     if (n) {
@@ -1386,7 +1434,7 @@
   }
 
   function renderList() {
-    const shown = Model.filterItems(items, { type: activeType, tag: activeTag, q: query });
+    const shown = Model.filterItems(items, { type: activeType, tag: activeTag, q: query, inter: interOnly });
     count.textContent =
       shown.length === items.length ? `${items.length} ผลงาน` : `${shown.length}/${items.length} ผลงาน`;
 
