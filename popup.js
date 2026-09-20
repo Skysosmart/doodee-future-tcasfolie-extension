@@ -5,6 +5,9 @@ const el = (id) => document.getElementById(id);
 
 let editingId = null; // null = กำลังเพิ่มใหม่, มีค่า = กำลังแก้ไขชิ้นนั้น
 let statusTimer = null;
+// ตัวตนของฟอร์มที่กำลังเปิดอยู่ — เพิ่มทุกครั้งที่ resetForm/startEditing เปลี่ยนว่าฟอร์มนี้คือชิ้นไหน
+// editingId เป็น null ได้ทั้ง "เพิ่มใหม่ A" และ "เพิ่มใหม่ B" — เทียบ editingId อย่างเดียวแยกสองกรณีนี้ไม่ออก
+let formSession = 0;
 
 // ช่องฉบับอังกฤษ — คีย์ตรงกับ Model.EN_FIELDS
 const EN_INPUTS = {
@@ -146,6 +149,12 @@ function renderPendingImages() {
 }
 
 function resetForm() {
+  // ฟอร์มนี้กำลังจะกลายเป็นชิ้นอื่น (หรือ "เพิ่มใหม่" อีกรอบ) — เลิกอาร์มปุ่มแปล/ปลดล็อกปุ่มไว้ก่อน
+  // ผลแปลที่ค้างจากฟอร์มก่อนหน้าจะถูก Model.shouldApplyTranslation ทิ้งเองตอนมันมาถึง ไม่ต้องรอมัน
+  disarmTranslate();
+  translating = false;
+  el("translateBtn").disabled = false;
+  formSession += 1;
   editingId = null;
   pendingImages = [];
   imagesTouched = false;
@@ -160,13 +169,17 @@ function resetForm() {
   writeEn({});
   el("enBox").open = false;
   el("enMsg").textContent = "";
-  el("translateBtn").textContent = "แปลเป็นอังกฤษ";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
 }
 
 async function startEditing(item) {
+  // สลับไปแก้ชิ้นนี้ — เลิกอาร์มปุ่มแปล/ปลดล็อกปุ่มของชิ้นก่อนหน้าไว้ก่อน เหมือน resetForm
+  disarmTranslate();
+  translating = false;
+  el("translateBtn").disabled = false;
+  formSession += 1;
   editingId = item.id;
   pendingImages = [];
   imagesTouched = false;
@@ -528,9 +541,11 @@ el("translateBtn").addEventListener("click", async () => {
   }
   disarmTranslate();
 
-  // ผู้ใช้อาจกดไปแก้ชิ้นอื่นระหว่างรอ — ผลที่มาช้าห้ามลงช่องของชิ้นใหม่
+  // ผู้ใช้อาจกดไปแก้ชิ้นอื่น/บันทึกแล้วเริ่มชิ้นใหม่ระหว่างรอ — ผลที่มาช้าห้ามลงช่องของชิ้นอื่น
+  // จับสามอย่างที่บ่งบอกตัวตนของฟอร์มนี้ไว้ตอนกด แล้วให้ Model.shouldApplyTranslation ตัดสินตอนผลมาถึง
+  // (editingId อย่างเดียวไม่พอ — มันเป็น null ได้ทั้ง "ฟอร์มเพิ่มใหม่" อันเดิมและอันใหม่ที่เพิ่งเริ่ม)
   const token = (translateToken += 1);
-  const editingWhenSent = editingId;
+  const sent = { token, formSession, editingId };
   translating = true;
   el("translateBtn").disabled = true;
   el("enMsg").textContent = "กำลังแปล… (ใช้เวลาราว 10-30 วินาที)";
@@ -548,7 +563,8 @@ el("translateBtn").addEventListener("click", async () => {
       },
     });
 
-    if (token !== translateToken || editingId !== editingWhenSent) return; // ไปชิ้นอื่นแล้ว ทิ้งผลนี้
+    const now = { token: translateToken, formSession, editingId };
+    if (!Model.shouldApplyTranslation(sent, now)) return; // ไปฟอร์มอื่นแล้ว ทิ้งผลนี้
     if (!res.ok) {
       let why = SiteCall.explain(res.status);
       if (res.status === 400 && /too_long/.test(res.text || "")) {
@@ -566,9 +582,15 @@ el("translateBtn").addEventListener("click", async () => {
     el("enBox").open = true;
     el("enMsg").textContent = "ได้ร่างแล้ว — ตรวจแก้ แล้วกด บันทึก/อัปเดต";
   } catch (error) {
-    if (token === translateToken) el("enMsg").textContent = `แปลไม่สำเร็จ: ${error.message}`;
+    // request เองก็ throw ได้ (แท็บถูกปิด, คุยกับแท็บไม่ได้) — เข้า catch ตรงนี้โดยไม่ผ่านเช็คข้างบน
+    // ต้องเช็คซ้ำก่อนเขียน enMsg ไม่งั้นข้อความ error ของชิ้นเก่าจะไปโผล่ในฟอร์มที่เปิดอยู่ตอนนี้
+    if (Model.shouldApplyTranslation(sent, { token: translateToken, formSession, editingId })) {
+      el("enMsg").textContent = `แปลไม่สำเร็จ: ${error.message}`;
+    }
   } finally {
-    if (token === translateToken) {
+    // ปลดล็อกปุ่มเฉพาะตอนที่ผลนี้ยังตรงกับฟอร์มที่เปิดอยู่ — ถ้าสลับไปแล้ว resetForm/startEditing
+    // ปลดล็อกให้ฟอร์มใหม่ไปแล้วตั้งแต่ตอนสลับ อย่ามาแตะซ้ำ เผื่อฟอร์มใหม่มีการแปลของตัวเองค้างอยู่
+    if (Model.shouldApplyTranslation(sent, { token: translateToken, formSession, editingId })) {
       translating = false;
       el("translateBtn").disabled = false;
     }

@@ -531,3 +531,23 @@ test("ส่งออกแล้วนำเข้ากลับ ฉบับ�
   assert.equal(back[0].en.title, "A");
   assert.equal(back[0].en.detail, "B");
 });
+
+test("shouldApplyTranslation รับเมื่อ token/formSession/editingId ตรงกันทั้งสาม", () => {
+  const state = { token: 1, formSession: 1, editingId: "x" };
+  assert.equal(M.shouldApplyTranslation(state, { token: 1, formSession: 1, editingId: "x" }), true);
+});
+
+test("shouldApplyTranslation ปฏิเสธเมื่อ token ขยับ (กดซ้ำ/สลับแล้วกดใหม่)", () => {
+  const sent = { token: 1, formSession: 1, editingId: "x" };
+  assert.equal(M.shouldApplyTranslation(sent, { token: 2, formSession: 1, editingId: "x" }), false);
+});
+
+test("shouldApplyTranslation ปฏิเสธเมื่อ formSession ขยับแม้ editingId ยังเป็น null ทั้งคู่ (เคสเพิ่มชิ้นใหม่ระหว่างรอ)", () => {
+  const sent = { token: 1, formSession: 1, editingId: null };
+  assert.equal(M.shouldApplyTranslation(sent, { token: 1, formSession: 2, editingId: null }), false);
+});
+
+test("shouldApplyTranslation ปฏิเสธเมื่อสลับไปแก้ชิ้นอื่น (editingId เปลี่ยน)", () => {
+  const sent = { token: 1, formSession: 1, editingId: "a" };
+  assert.equal(M.shouldApplyTranslation(sent, { token: 1, formSession: 1, editingId: "b" }), false);
+});
