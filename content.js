@@ -282,14 +282,15 @@
     ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
              "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
              "provider", "agency", "school"]],
+    ["status", [...Model.STATUS_LABELS, "participation"]],
     ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
                 "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
                 "essay", "reason", "free__body"]],
     ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
               "year", "date", "เมื่อ"]],
     ["level", ["ระดับ", "level", "scope"]],
-    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "result", "award",
-                "rank", "placement"]],
+    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "ผลการอบรม", "ผลตอบรับ",
+                "result", "award", "rank", "placement"]],
     ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
     ["link", ["ลิงก์", "ลิงค์", "ลิ้งก์", "url", "เว็บไซต์", "link"]],
   ];
@@ -397,6 +398,7 @@
       year: item.when || parted.when,
       level: item.level || "",
       result: item.result || "",
+      status: item.status || "",
       hours: item.hours || "",
       link: item.link || "",
     };
@@ -504,7 +506,7 @@
 
   const KIND_TH = {
     title: "ชื่อ", org: "หน่วยงาน", detail: "รายละเอียด", year: "ปี",
-    level: "ระดับ", result: "ผลรางวัล", hours: "ชั่วโมง", link: "ลิงก์",
+    level: "ระดับ", result: "ผลรางวัล", status: "สถานะการเข้าร่วม", hours: "ชั่วโมง", link: "ลิงก์",
   };
 
   function showPlan(plan) {
@@ -1277,6 +1279,7 @@
       [item.type ? item.type.split(" / ")[0] : "", ""],
       [item.level, "is-level"],
       [item.result, ""],
+      [item.status, ""],
       [imgCount ? `🖼 ${imgCount} รูป` : "", "is-img"],
     ];
     for (const [text, extra] of pills) {
