@@ -16,12 +16,9 @@
     "ผลงานสร้างสรรค์",
   ];
 
-  const RESULT_LABELS = [
-    "ผลรางวัล / อันดับ",
-    "สถานะการเข้าร่วม",
-    "ผลการอบรม",
-    "ผลตอบรับ / รางวัล",
-  ];
+  // ป้ายกำกับอยู่ที่ Model ที่เดียว — content.js ใช้ชุดเดียวกันหาช่องบนหน้าเว็บ
+  const RESULT_LABELS = root.Model.RESULT_LABELS;
+  const STATUS_LABELS = root.Model.STATUS_LABELS;
   const LINK_LABEL = "ลิงก์แสดงผลงาน";
   const WHEN_LABELS = ["วันที่", "ช่วงเวลา"];
 
@@ -163,6 +160,7 @@
             hours: "",
             level: "",
             result: "",
+            status: "",
             link: "",
             detail: "",
           };
@@ -176,6 +174,12 @@
           current.when = meta.when;
           current.hours = meta.hours;
           current.org = meta.org;
+          continue;
+        }
+
+        const status = afterLabel(row, STATUS_LABELS, true);
+        if (status !== null) {
+          current.status = status;
           continue;
         }
 
@@ -205,7 +209,6 @@
 
   root.PdfFolio = {
     SECTION_TYPES,
-    RESULT_LABELS,
     bareOf,
     matchLevel,
     sectionType,
