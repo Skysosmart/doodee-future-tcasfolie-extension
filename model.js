@@ -21,6 +21,15 @@
     "ระดับนานาชาติ",
   ];
 
+  // ป้ายกำกับที่ TCASFolio ใช้ในแฟ้มและในฟอร์ม — เก็บไว้ที่เดียว
+  // pdfFolio.js ใช้หาค่าจากไฟล์ · content.js ใช้เดาว่าช่องบนหน้าเว็บคือช่องอะไร
+  // (content script โหลด model.js อยู่แล้ว ดู manifest.json)
+  //
+  // แต่ละหมวดมีป้ายของตัวเองป้ายเดียว: รางวัล→ผลรางวัล · กิจกรรม→สถานะการเข้าร่วม
+  // อบรม→ผลการอบรม · ผลงานสร้างสรรค์→ผลตอบรับ (วัดจากแฟ้มจริง 2026-09-15)
+  const STATUS_LABELS = ["สถานะการเข้าร่วม"];
+  const RESULT_LABELS = ["ผลรางวัล / อันดับ", "ผลการอบรม", "ผลตอบรับ / รางวัล"];
+
   const EXPORT_VERSION = 1;
 
   function str(value) {
@@ -60,6 +69,7 @@
       when: str(fields.when),
       level: LEVELS.includes(str(fields.level)) ? str(fields.level) : "",
       result: str(fields.result),
+      status: str(fields.status),
       hours: str(fields.hours),
       link: str(fields.link),
       detail: str(fields.detail),
@@ -84,6 +94,7 @@
         // ระดับที่ไม่ตรงตัวเลือกของเว็บ ปล่อยว่างดีกว่าเก็บค่าที่เติมไม่ได้
         level: LEVELS.includes(str(entry.level)) ? str(entry.level) : "",
         result: str(entry.result),
+        status: str(entry.status),
         hours: str(entry.hours),
         link: str(entry.link),
         detail: str(entry.detail),
@@ -119,7 +130,7 @@
       if (type && entry.type !== type) return false;
       if (tag && !entry.tags.includes(tag)) return false;
       if (!words.length) return true;
-      const hay = [entry.title, entry.org, entry.when, entry.result, entry.link, entry.detail, entry.tags.join(" ")]
+      const hay = [entry.title, entry.org, entry.when, entry.result, entry.status, entry.link, entry.detail, entry.tags.join(" ")]
         .join(" ")
         .toLowerCase();
       return words.every((w) => hay.includes(w));
@@ -311,6 +322,8 @@
   root.Model = {
     TYPES,
     LEVELS,
+    STATUS_LABELS,
+    RESULT_LABELS,
     EXPORT_VERSION,
     newId,
     normalizeTags,

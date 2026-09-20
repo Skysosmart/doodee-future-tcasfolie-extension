@@ -398,3 +398,48 @@ test("parseImport ยังอ่านไฟล์ backup เก่าที่
   assert.equal(items[0].when, "");
   assert.equal(items[0].link, "");
 });
+
+test("makeItem เก็บสถานะการเข้าร่วมแยกจากผลรางวัล", () => {
+  const item = M.makeItem({
+    type: "กิจกรรม",
+    title: "ค่ายสมมติ",
+    status: "ได้เข้าร่วมและส่งผลงาน",
+  });
+  assert.equal(item.status, "ได้เข้าร่วมและส่งผลงาน");
+  assert.equal(item.result, "", "ผลรางวัลต้องไม่ถูกเติมแทน");
+});
+
+test("normalize เติม status ให้ของเก่า แล้วบอกว่าต้องเขียนกลับ", () => {
+  const old = [
+    {
+      id: "a1",
+      type: "กิจกรรม",
+      title: "กิจกรรมสมมติ",
+      org: "โรงเรียนสมมติ",
+      when: "",
+      level: "",
+      result: "",
+      hours: "",
+      link: "",
+      detail: "",
+      tags: [],
+      createdAt: 1,
+    },
+  ];
+  const out = M.normalize(old);
+  assert.equal(out.items[0].status, "");
+  assert.equal(out.changed, true, "ของเก่าต้องถูกเขียนกลับหนึ่งครั้ง");
+});
+
+test("filterItems ค้นเจอจากสถานะการเข้าร่วม", () => {
+  const items = M.normalize([
+    M.makeItem({ type: "กิจกรรม", title: "ก", status: "ได้เข้าร่วมและส่งผลงาน" }, { id: "a", now: 1 }),
+    M.makeItem({ type: "กิจกรรม", title: "ข", result: "เหรียญทอง" }, { id: "b", now: 1 }),
+  ]).items;
+  assert.deepEqual(M.filterItems(items, { q: "ส่งผลงาน" }).map((i) => i.id), ["a"]);
+});
+
+test("ป้ายกำกับของแฟ้มอยู่ที่ Model ที่เดียว", () => {
+  assert.deepEqual(M.STATUS_LABELS, ["สถานะการเข้าร่วม"]);
+  assert.deepEqual(M.RESULT_LABELS, ["ผลรางวัล / อันดับ", "ผลการอบรม", "ผลตอบรับ / รางวัล"]);
+});
