@@ -20,6 +20,7 @@ let cancelled = false;
 let drafts = [];
 let imagesByPage = new Map();
 let rawByPage = [];
+let puaLeft = 0;
 
 function show(name) {
   for (const [key, node] of Object.entries(views)) node.hidden = key !== name;
@@ -47,8 +48,11 @@ async function readFile(file) {
   el("barFill").style.width = "2%";
 
   let doc;
+  let bytes;
   try {
     const buffer = await file.arrayBuffer();
+    // สำเนาไว้อ่าน /ActualText เอง — pdf.js ยึด buffer ที่ส่งเข้าไปแล้วปล่อยว่าง
+    bytes = new Uint8Array(buffer.slice(0));
     doc = await pdfjsLib.getDocument({ data: buffer, isEvalSupported: false }).promise;
   } catch (error) {
     const why = String((error && error.name) || "");
@@ -85,18 +89,26 @@ async function readFile(file) {
 
     try {
       const page = await doc.getPage(n);
-      const text = await page.getTextContent();
-      const items = (text.items || [])
-        .filter((it) => it && typeof it.str === "string")
-        .map((it) => ({
-          str: it.str,
-          x: it.transform ? it.transform[4] : 0,
-          // pdf.js นับ y จากล่างขึ้นบน (y มาก = อยู่สูง) ซึ่งตรงกับที่ pdfText เรียงอยู่แล้ว
-          // (buildRows เรียง y มาก→น้อย = บนลงล่าง) ส่งค่าดิบไปได้เลย ไม่ต้องกลับด้าน
-          y: it.transform ? it.transform[5] : 0,
-          w: Number(it.width) || 0,
-          h: Number(it.height) || 0,
-        }));
+      // ขอ marked content มาด้วย เพื่อรู้ขอบเขตของ Span แล้วเอาไปจับคู่กับ
+      // /ActualText ที่อ่านจาก content stream เอง (pdf.js ไม่ส่งค่านั้นออกมา)
+      const text = await page.getTextContent({ includeMarkedContent: true });
+      const raw = (text.items || []).map((it) =>
+        typeof it.str === "string"
+          ? {
+              str: it.str,
+              x: it.transform ? it.transform[4] : 0,
+              // pdf.js นับ y จากล่างขึ้นบน (y มาก = อยู่สูง) ซึ่งตรงกับที่ pdfText เรียงอยู่แล้ว
+              // (buildRows เรียง y มาก→น้อย = บนลงล่าง) ส่งค่าดิบไปได้เลย ไม่ต้องกลับด้าน
+              y: it.transform ? it.transform[5] : 0,
+              w: Number(it.width) || 0,
+              h: Number(it.height) || 0,
+            }
+          : it,
+      );
+      const spans = await PdfActualText.spansFromPage(bytes, page.ref);
+      const items = PdfGlyphs.applyActualText(raw, spans).filter(
+        (it) => it && typeof it.str === "string",
+      );
       pages.push({ page: n, items });
       rawByPage.push({ page: n, text: items.map((i) => i.str).join(" ") });
 
@@ -122,26 +134,51 @@ async function readFile(file) {
     return;
   }
 
-  const result = PdfText.toDrafts(pages);
+  // แฟ้มที่ TCASFolio ส่งออกมีโครงชัดเจน อ่านตรง ๆ ได้ทุกช่อง
+  // เล่มที่ทำเอง (Canva ฯลฯ) ไม่มีโครง ต้องเดาเอาเหมือนเดิม
+  //
+  // ปิดการซ่อมฝาแฝดตอนสร้างแถวไว้ตรวจรูปแบบ เพราะแฟ้มไม่ได้ฝังข้อความสองชุด
+  // ข้อความซ้ำในนั้นเป็นของจริง (เช่น "สถานะการเข้าร่วม : ได้เข้าร่วมและ…")
+  const rowPages = pages.map((p) => ({
+    page: p.page,
+    rows: PdfText.buildRows(PdfGlyphs.normalizeItems(p.items), undefined, { twins: false }).map(
+      (r) => r.text,
+    ),
+  }));
+  const isFolio = PdfFolio.looksLikeFolio(rowPages);
+  const result = isFolio ? PdfFolio.toDrafts(rowPages) : PdfText.toDrafts(pages);
+
   drafts = result.drafts.map((d, i) => ({
+    org: "",
+    when: "",
+    hours: "",
+    result: "",
+    status: "",
+    link: "",
     ...d,
     id: `draft-${i}`,
-    org: "",
-    result: "",
     chosen: true,
     pickedImages: new Set(),
   }));
 
-  renderReview(result.skipped, doc.numPages);
+  // ตัวอักษรที่ถอดไม่ออกต้องบอกผู้ใช้ ไม่ใช่ปล่อยให้ไปเจอเองในคลัง
+  puaLeft = rowPages.reduce(
+    (n, p) => n + p.rows.reduce((m, row) => m + PdfGlyphs.countPua(row), 0),
+    0,
+  );
+
+  renderReview(result.skipped, doc.numPages, isFolio);
   show("review");
 }
 
 // ── หน้าตรวจ ────────────────────────────────────────────────────────
-function renderReview(skipped, pageCount) {
+function renderReview(skipped, pageCount, isFolio) {
   const shots = [...imagesByPage.values()].reduce((n, list) => n + list.length, 0);
+  const kind = isFolio ? "แฟ้มจาก TCASFolio" : "เล่ม";
+  const warn = puaLeft ? ` · อ่านบางตัวอักษรไม่ออก ${puaLeft} ตัว ลองตรวจดูก่อนบันทึก` : "";
   el("reviewLead").textContent =
-    `จากเล่ม ${pageCount} หน้า ได้ร่าง ${drafts.length} ชิ้น และรูป ${shots} ใบ · ` +
-    `ติ๊กเลือกและแก้ให้ถูกก่อนบันทึก`;
+    `จาก${kind} ${pageCount} หน้า ได้ร่าง ${drafts.length} ชิ้น และรูป ${shots} ใบ · ` +
+    `ติ๊กเลือกและแก้ให้ถูกก่อนบันทึก${warn}`;
 
   const box = el("drafts");
   box.replaceChildren(...drafts.map(draftCard));
@@ -236,9 +273,50 @@ function draftCard(draft) {
 
   const org = document.createElement("input");
   org.type = "text";
-  org.placeholder = "เช่น สำนักงานการวิจัยแห่งชาติ · 2569";
+  org.value = draft.org || "";
+  org.placeholder = "เช่น สำนักงานการวิจัยแห่งชาติ (วช.)";
   org.addEventListener("input", () => {
     draft.org = org.value;
+  });
+
+  const when = document.createElement("input");
+  when.type = "text";
+  when.value = draft.when || "";
+  when.placeholder = "เช่น 24 พ.ค. 2569";
+  when.addEventListener("input", () => {
+    draft.when = when.value;
+  });
+
+  const resultField = document.createElement("input");
+  resultField.type = "text";
+  resultField.value = draft.result || "";
+  resultField.placeholder = "เช่น เหรียญทอง, Completed";
+  resultField.addEventListener("input", () => {
+    draft.result = resultField.value;
+  });
+
+  const status = document.createElement("input");
+  status.type = "text";
+  status.value = draft.status || "";
+  status.placeholder = "เช่น ได้เข้าร่วมและส่งผลงาน";
+  status.addEventListener("input", () => {
+    draft.status = status.value;
+  });
+
+  const hours = document.createElement("input");
+  hours.type = "text";
+  hours.value = draft.hours || "";
+  hours.placeholder = "เช่น 48";
+  hours.addEventListener("input", () => {
+    draft.hours = hours.value;
+  });
+
+  const link = document.createElement("input");
+  link.type = "text";
+  link.value = draft.link || "";
+  link.placeholder = "เช่น https://example.com/";
+  link.addEventListener("input", () => {
+    draft.link = link.value;
   });
 
   const detail = document.createElement("textarea");
@@ -252,7 +330,12 @@ function draftCard(draft) {
     field("หัวข้อ", title, true),
     field("หมวด", type),
     field("ระดับ", level),
-    field("หน่วยงาน / ปี (ถ้ามี)", org, true),
+    field("หน่วยงาน", org, true),
+    field("วัน / ช่วงเวลา", when),
+    field("ชั่วโมง", hours),
+    field("ผลรางวัล / ผลตอบรับ", resultField, true),
+    field("สถานะการเข้าร่วม", status, true),
+    field("ลิงก์ผลงาน", link, true),
     field("รายละเอียด", detail, true),
   );
 
@@ -315,8 +398,12 @@ async function save() {
         type: d.type,
         title: d.title,
         org: d.org,
+        when: d.when,
         level: d.level,
         result: d.result,
+        status: d.status,
+        hours: d.hours,
+        link: d.link,
         detail: d.detail,
       }),
     );

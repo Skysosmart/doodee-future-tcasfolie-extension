@@ -16,9 +16,12 @@
     const head = [item.type && `[${item.type}]`, item.title].filter(Boolean).join(" ").trim();
     const meta = [
       line("หน่วยงาน", item.org),
+      line("ช่วงเวลา", item.when),
       line("ระดับ", item.level),
       line("ผลงาน", item.result),
+      line("สถานะการเข้าร่วม", item.status),
       line("ชั่วโมง", item.hours),
+      line("ลิงก์", item.link),
     ].filter(Boolean);
     const tags = Array.isArray(item.tags) && item.tags.length ? `แท็ก: ${item.tags.join(", ")}` : "";
     return [head, ...meta, (item.detail || "").trim(), tags].filter(Boolean).join("\n");

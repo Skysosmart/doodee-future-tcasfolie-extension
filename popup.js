@@ -5,6 +5,30 @@ const el = (id) => document.getElementById(id);
 
 let editingId = null; // null = กำลังเพิ่มใหม่, มีค่า = กำลังแก้ไขชิ้นนั้น
 let statusTimer = null;
+// ตัวตนของฟอร์มที่กำลังเปิดอยู่ — เพิ่มทุกครั้งที่ resetForm/startEditing เปลี่ยนว่าฟอร์มนี้คือชิ้นไหน
+// editingId เป็น null ได้ทั้ง "เพิ่มใหม่ A" และ "เพิ่มใหม่ B" — เทียบ editingId อย่างเดียวแยกสองกรณีนี้ไม่ออก
+let formSession = 0;
+
+// ช่องฉบับอังกฤษ — คีย์ตรงกับ Model.EN_FIELDS
+const EN_INPUTS = {
+  title: "enTitle",
+  org: "enOrg",
+  when: "enWhen",
+  result: "enResult",
+  status: "enStatus",
+  detail: "enDetail",
+};
+
+function readEn() {
+  const out = {};
+  for (const [key, id] of Object.entries(EN_INPUTS)) out[key] = el(id).value;
+  return out;
+}
+
+function writeEn(en) {
+  const clean = Model.normalizeEn(en);
+  for (const [key, id] of Object.entries(EN_INPUTS)) el(id).value = clean[key];
+}
 
 function showStatus(message, isError) {
   const status = el("status");
@@ -64,11 +88,15 @@ function readForm() {
     type: el("type").value,
     title: el("title").value,
     org: el("org").value,
+    when: el("when").value,
     level: el("level").value,
     result: el("result").value,
+    status: el("statusField").value,
     hours: el("hours").value,
+    link: el("link").value,
     tags: el("tags").value,
     detail: el("detail").value,
+    en: readEn(),
   };
 }
 
@@ -121,6 +149,12 @@ function renderPendingImages() {
 }
 
 function resetForm() {
+  // ฟอร์มนี้กำลังจะกลายเป็นชิ้นอื่น (หรือ "เพิ่มใหม่" อีกรอบ) — เลิกอาร์มปุ่มแปล/ปลดล็อกปุ่มไว้ก่อน
+  // ผลแปลที่ค้างจากฟอร์มก่อนหน้าจะถูก Model.shouldApplyTranslation ทิ้งเองตอนมันมาถึง ไม่ต้องรอมัน
+  disarmTranslate();
+  translating = false;
+  el("translateBtn").disabled = false;
+  formSession += 1;
   editingId = null;
   pendingImages = [];
   imagesTouched = false;
@@ -131,13 +165,21 @@ function resetForm() {
   }
   el("type").selectedIndex = 0;
   el("level").selectedIndex = 0;
-  for (const id of ["title", "org", "result", "hours", "tags", "detail"]) el(id).value = "";
+  for (const id of ["title", "org", "when", "result", "statusField", "hours", "link", "tags", "detail"]) el(id).value = "";
+  writeEn({});
+  el("enBox").open = false;
+  el("enMsg").textContent = "";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
 }
 
 async function startEditing(item) {
+  // สลับไปแก้ชิ้นนี้ — เลิกอาร์มปุ่มแปล/ปลดล็อกปุ่มของชิ้นก่อนหน้าไว้ก่อน เหมือน resetForm
+  disarmTranslate();
+  translating = false;
+  el("translateBtn").disabled = false;
+  formSession += 1;
   editingId = item.id;
   pendingImages = [];
   imagesTouched = false;
@@ -173,11 +215,18 @@ async function startEditing(item) {
   el("type").value = item.type;
   el("title").value = item.title;
   el("org").value = item.org;
+  el("when").value = item.when || "";
   el("level").value = item.level || "";
   el("result").value = item.result || "";
+  el("statusField").value = item.status || "";
   el("hours").value = item.hours || "";
+  el("link").value = item.link || "";
   el("tags").value = Model.formatTags(item.tags);
   el("detail").value = item.detail;
+  writeEn(item.en);
+  // เปิดกล่องให้เองเมื่อชิ้นนี้มีฉบับอังกฤษแล้ว จะได้เห็นว่ามีอยู่
+  el("enBox").open = Model.hasEnglish(item);
+  el("enMsg").textContent = "";
   el("formHeading").textContent = "แก้ไขผลงาน";
   el("saveBtn").textContent = "อัปเดต";
   el("cancelBtn").hidden = false;
@@ -193,9 +242,16 @@ function itemCard(item) {
   title.className = "item-title";
   title.textContent = item.title;
 
+  if (Model.hasEnglish(item)) {
+    const badge = document.createElement("span");
+    badge.className = "en-badge";
+    badge.textContent = "EN";
+    title.appendChild(badge);
+  }
+
   const meta = document.createElement("div");
   meta.className = "item-meta";
-  const extras = [item.level, item.result].filter(Boolean).join(" · ");
+  const extras = [item.level, item.result, item.status].filter(Boolean).join(" · ");
   meta.textContent = [item.type, item.org, extras].filter(Boolean).join(" · ");
 
   box.append(title, meta);
@@ -452,6 +508,113 @@ el("analyseBtn").addEventListener("click", () => {
 
 el("importBtn").addEventListener("click", openBackupPage);
 el("welcomeImport").addEventListener("click", openBackupPage);
+
+// แปลเป็นอังกฤษ — ขอ "ร่าง" จาก doodee-future.com แล้วให้ผู้ใช้ตรวจแก้เอง
+// ไม่บันทึกให้อัตโนมัติ: ข้อความนี้กำลังจะไปอยู่ในใบสมัครจริง
+const TRANSLATE_PATH = "/api/extension/translate";
+
+// ชื่อไทย + ขีดจำกัดตัวอักษรของแต่ละช่อง — ต้องตรงกับ FIELD_LIMITS ฝั่ง doodee-future.com
+// (route ตอบ { error: "too_long", field }) เพื่อบอกได้ว่าช่องไหนยาวเกิน ไม่ใช่เดาว่าเป็นรายละเอียดเสมอ
+const TRANSLATE_FIELD_INFO = {
+  title: { label: "ชื่อผลงาน", limit: 300 },
+  org: { label: "หน่วยงาน", limit: 300 },
+  when: { label: "วัน / ช่วงเวลา", limit: 300 },
+  result: { label: "ผลรางวัล / ผลตอบรับ", limit: 300 },
+  status: { label: "สถานะการเข้าร่วม", limit: 300 },
+  detail: { label: "รายละเอียด", limit: 4000 },
+};
+
+let translating = false;
+let translateToken = 0;
+let translateArmed = false;
+let translateArmTimer = null;
+
+function disarmTranslate() {
+  translateArmed = false;
+  clearTimeout(translateArmTimer);
+  el("translateBtn").textContent = "แปลเป็นอังกฤษ";
+}
+
+el("translateBtn").addEventListener("click", async () => {
+  if (translating) return;
+  const fields = readForm();
+  if (!fields.title.trim()) {
+    el("enMsg").textContent = "ใส่ชื่อผลงาน (ภาษาไทย) ก่อนถึงจะแปลได้";
+    el("title").focus();
+    return;
+  }
+
+  // มีฉบับอังกฤษอยู่แล้ว ต้องถามก่อนทับ — จังหวะเดียวกับปุ่มลบ
+  if (!translateArmed && !Model.isEmptyEn(readEn())) {
+    translateArmed = true;
+    el("translateBtn").textContent = "แทนที่ฉบับอังกฤษเดิม?";
+    translateArmTimer = setTimeout(disarmTranslate, 3000);
+    return;
+  }
+  disarmTranslate();
+
+  // ผู้ใช้อาจกดไปแก้ชิ้นอื่น/บันทึกแล้วเริ่มชิ้นใหม่ระหว่างรอ — ผลที่มาช้าห้ามลงช่องของชิ้นอื่น
+  // จับสามอย่างที่บ่งบอกตัวตนของฟอร์มนี้ไว้ตอนกด แล้วให้ Model.shouldApplyTranslation ตัดสินตอนผลมาถึง
+  // (editingId อย่างเดียวไม่พอ — มันเป็น null ได้ทั้ง "ฟอร์มเพิ่มใหม่" อันเดิมและอันใหม่ที่เพิ่งเริ่ม)
+  const token = (translateToken += 1);
+  const sent = { token, formSession, editingId };
+  translating = true;
+  el("translateBtn").disabled = true;
+  el("enMsg").textContent = "กำลังแปล… (ใช้เวลาราว 10-30 วินาที)";
+
+  try {
+    // หกช่องตาม Model.EN_FIELDS — สร้างจากลิสต์เดียวกับที่เว็บใช้ยืนยัน (TRANSLATE_FIELDS มีเทสต์ปักไว้)
+    // แทนที่จะพิมพ์ทีละช่อง กันหลุดตกช่องหรือสะกดชื่อคีย์ผิดโดยไม่มีอะไรเตือน
+    const res = await SiteCall.request(TRANSLATE_PATH, {
+      method: "POST",
+      body: Object.fromEntries(Model.EN_FIELDS.map((k) => [k, fields[k]])),
+    });
+
+    const now = { token: translateToken, formSession, editingId };
+    if (!Model.shouldApplyTranslation(sent, now)) return; // ไปฟอร์มอื่นแล้ว ทิ้งผลนี้
+    if (!res.ok) {
+      let why = SiteCall.explain(res.status);
+      if (res.status === 400) {
+        // route ตอบ { error: "too_long", field } — res.text อาจไม่ใช่ JSON เลยก็ได้ (เช่นหน้า error อื่น)
+        let errData = null;
+        try {
+          errData = JSON.parse(res.text || "");
+        } catch (error) {
+          errData = null;
+        }
+        if (errData && errData.error === "too_long") {
+          const info = TRANSLATE_FIELD_INFO[errData.field];
+          why = info
+            ? `ข้อความยาวเกินไปสำหรับการแปล (${info.label}) — ย่อลงให้ไม่เกิน ${info.limit} ตัวอักษร แล้วลองใหม่`
+            : "ข้อความยาวเกินไปสำหรับการแปล — ย่อลงแล้วลองใหม่";
+        }
+      }
+      if (res.status === 502) why = "ระบบแปลตอบกลับมาไม่ครบ ลองกดอีกครั้ง";
+      throw new Error(why);
+    }
+    if (SiteCall.looksLikeHtml(res.text)) {
+      throw new Error("เว็บส่ง HTML กลับมาแทน JSON — น่าจะเด้งไปหน้าล็อกอิน");
+    }
+
+    const data = JSON.parse(res.text);
+    writeEn(data && data.en);
+    el("enBox").open = true;
+    el("enMsg").textContent = "ได้ร่างแล้ว — ตรวจแก้ แล้วกด บันทึก/อัปเดต";
+  } catch (error) {
+    // request เองก็ throw ได้ (แท็บถูกปิด, คุยกับแท็บไม่ได้) — เข้า catch ตรงนี้โดยไม่ผ่านเช็คข้างบน
+    // ต้องเช็คซ้ำก่อนเขียน enMsg ไม่งั้นข้อความ error ของชิ้นเก่าจะไปโผล่ในฟอร์มที่เปิดอยู่ตอนนี้
+    if (Model.shouldApplyTranslation(sent, { token: translateToken, formSession, editingId })) {
+      el("enMsg").textContent = `แปลไม่สำเร็จ: ${error.message}`;
+    }
+  } finally {
+    // ปลดล็อกปุ่มเฉพาะตอนที่ผลนี้ยังตรงกับฟอร์มที่เปิดอยู่ — ถ้าสลับไปแล้ว resetForm/startEditing
+    // ปลดล็อกให้ฟอร์มใหม่ไปแล้วตั้งแต่ตอนสลับ อย่ามาแตะซ้ำ เผื่อฟอร์มใหม่มีการแปลของตัวเองค้างอยู่
+    if (Model.shouldApplyTranslation(sent, { token: translateToken, formSession, editingId })) {
+      translating = false;
+      el("translateBtn").disabled = false;
+    }
+  }
+});
 
 fillTypeOptions();
 fillLevelOptions();

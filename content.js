@@ -15,6 +15,7 @@
   let activeType = "";
   let activeTag = "";
   let query = "";
+  let interOnly = false;
   // เริ่มที่ย่อไว้เสมอ — panel ลอย fixed ทับปุ่มของใบสมัครจริงได้
   // (วัดแล้ว: elementFromPoint บนปุ่มชิดขอบขวาคืน host ตัวนี้ ไม่ใช่ปุ่ม)
   // ถ้าผู้ใช้เคยกางไว้ ค่าใน storage จะมากางให้เองตอน init
@@ -195,6 +196,18 @@
   typeBar.className = "typebar";
 
   function renderTypeBar() {
+    const interChip = document.createElement("button");
+    interChip.type = "button";
+    interChip.className = "chip" + (interOnly ? " is-active" : "");
+    interChip.setAttribute("aria-pressed", String(interOnly));
+    interChip.textContent = "Inter";
+    interChip.title = "เฉพาะผลงานที่มีฉบับภาษาอังกฤษ";
+    interChip.addEventListener("click", () => {
+      interOnly = !interOnly;
+      renderTypeBar();
+      renderList();
+    });
+
     typeBar.replaceChildren(
       ...["", ...Model.TYPES].map((type) => {
         const chip = document.createElement("button");
@@ -210,6 +223,7 @@
         });
         return chip;
       }),
+      interChip,
       tagToggle,
     );
   }
@@ -274,24 +288,8 @@
   let lastFill = []; // [{ el, previous }] สำหรับปุ่มย้อนกลับ รองรับหลายช่องพร้อมกัน
   let pendingPlan = null; // แผนที่รอผู้ใช้ยืนยันก่อนเขียนลงฟอร์มจริง
 
-  // คำที่ใช้เดาว่าช่องนั้นคือช่องอะไร — ดูจาก label/placeholder/name/id
-  const FIELD_HINTS = [
-    ["title", ["ชื่อผลงาน", "ชื่อรางวัล", "ชื่อโครงงาน", "ชื่อกิจกรรม", "ชื่อหลักสูตร",
-               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject",
-               "free__title"]],
-    ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
-             "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
-             "provider", "agency", "school"]],
-    ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
-                "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
-                "essay", "reason", "free__body"]],
-    ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
-              "year", "date", "เมื่อ"]],
-    ["level", ["ระดับ", "level", "scope"]],
-    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "result", "award",
-                "rank", "placement"]],
-    ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
-  ];
+  // คำใบ้ที่ใช้เดาว่าช่องนั้นคือช่องอะไร (FIELD_HINTS + การสแกน) อยู่ใน model.js แล้ว
+  // — เป็นตรรกะล้วน ๆ ทดสอบด้วย node --test ได้ตรง ๆ ที่นี่เหลือแค่ห่อด้วยส่วนที่ต้องพึ่ง DOM
 
   // ทุกแหล่งที่บอกได้ว่าช่องนี้คือช่องอะไร — ใช้จับคู่
   // ช่องของ TCASFolio เป็น contenteditable div ซึ่งไม่มี .placeholder แบบ input
@@ -352,12 +350,9 @@
   }
 
   function guessKind(el) {
-    const haystack = labelSources(el).join(" ").toLowerCase();
-    for (const [kind, words] of FIELD_HINTS) {
-      for (const w of words) {
-        if (haystack.includes(w.toLowerCase())) return kind;
-      }
-    }
+    const haystack = labelSources(el).join(" ");
+    const kind = Model.kindFromHaystack(haystack);
+    if (kind) return kind;
     // ไม่มีคำใบ้เลย — ช่องยาว ๆ เดาว่าเป็นรายละเอียด อย่างอื่นไม่เดา
     return el.tagName === "TEXTAREA" || el.isContentEditable ? "detail" : "";
   }
@@ -389,12 +384,16 @@
     const parted = splitOrg(item.org);
     const values = {
       title: item.title,
-      org: parted.org,
+      // ของเก่าที่บันทึกก่อนมีช่อง when ยังเก็บเป็น "หน่วยงาน · ปี" อยู่
+      // จึงถอยไปใช้ splitOrg เฉพาะตอน when ว่างเท่านั้น
+      org: item.when ? item.org : parted.org,
       detail: item.detail,
-      year: parted.when,
+      year: item.when || parted.when,
       level: item.level || "",
       result: item.result || "",
+      status: item.status || "",
       hours: item.hours || "",
+      link: item.link || "",
     };
 
     const all = candidateFields();
@@ -500,7 +499,7 @@
 
   const KIND_TH = {
     title: "ชื่อ", org: "หน่วยงาน", detail: "รายละเอียด", year: "ปี",
-    level: "ระดับ", result: "ผลรางวัล", hours: "ชั่วโมง",
+    level: "ระดับ", result: "ผลรางวัล", status: "สถานะการเข้าร่วม", hours: "ชั่วโมง", link: "ลิงก์",
   };
 
   function showPlan(plan) {
@@ -1118,7 +1117,8 @@
     // บล็อกของ TCASFolio ถูก React สร้างใหม่ทั้งก้อนหลังเกือบทุก action
     // (ปิดแผงแก้ไข, กดเพิ่มรูป, อัปโหลด) — reference ที่จับไว้หลุดทันที
     // จึงห้ามถือ element ไว้ข้าม await: หาใหม่จากหัวข้อทุกครั้งที่จะใช้
-    const live = () => blockFor(item);
+    // บล็อกที่มาจาก ＋ Inter มีหัวข้อภาษาอังกฤษ — ลองหาแบบไทยก่อน ไม่เจอค่อยลองแบบอังกฤษ
+    const live = () => blockFor(item) || (Model.hasEnglish(item) ? blockFor(Model.inEnglish(item)) : null);
 
     if (!live()) {
       showNote("ยังไม่มีบล็อกของผลงานนี้บนหน้า — เติมข้อความก่อน แล้วค่อยแนบรูป");
@@ -1272,7 +1272,9 @@
     const pills = [
       [item.type ? item.type.split(" / ")[0] : "", ""],
       [item.level, "is-level"],
+      [Model.hasEnglish(item) ? "EN" : "", "is-en"],
       [item.result, ""],
+      [item.status, ""],
       [imgCount ? `🖼 ${imgCount} รูป` : "", "is-img"],
     ];
     for (const [text, extra] of pills) {
@@ -1311,7 +1313,7 @@
     const fillRow = document.createElement("div");
     fillRow.className = "fillrow";
 
-    // ปุ่มย่อยพับไว้ก่อน — บนการ์ดเหลือแค่สองปุ่มที่ใช้จริงทุกครั้ง
+    // ปุ่มย่อยพับไว้ก่อน — แถวหลักบนการ์ดเหลือแค่สามหรือสี่ปุ่มที่ใช้จริงทุกครั้ง
     const moreRow = document.createElement("div");
     moreRow.className = "fillrow more";
     moreRow.hidden = true;
@@ -1326,6 +1328,17 @@
     ]) {
       if (value) moreRow.append(fillButton(item, what, value));
     }
+    // ปุ่มเดิมสามปุ่มเขียนแต่ภาษาไทย — มีฉบับอังกฤษแล้วเพิ่มอีกชุดให้เลือกได้ ไม่ทับของเดิม
+    if (Model.hasEnglish(item)) {
+      const en = Model.inEnglish(item);
+      for (const [what, value] of [
+        ["ชื่อ · EN", en.title],
+        ["หน่วยงาน · EN", en.org],
+        ["รายละเอียด · EN", en.detail],
+      ]) {
+        if (value) moreRow.append(fillButton(item, what, value));
+      }
+    }
 
     const newBtn = document.createElement("button");
     newBtn.type = "button";
@@ -1334,6 +1347,20 @@
     newBtn.title = "สร้างบล็อกใหม่ในเว็บให้ตรงหมวด แล้วเติมข้อมูลชิ้นนี้";
     newBtn.addEventListener("click", () => { createBlockThenPlan(item, newBtn); });
     fillRow.append(newBtn);
+
+    const interBtn = document.createElement("button");
+    interBtn.type = "button";
+    interBtn.className = "fill fill-inter";
+    interBtn.textContent = "＋ Inter";
+    interBtn.title = "ลงพอร์ตด้วยฉบับภาษาอังกฤษ (หลักสูตรอินเตอร์)";
+    interBtn.addEventListener("click", () => {
+      if (!Model.hasEnglish(item)) {
+        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › แปลเป็นอังกฤษ ก่อน");
+        return;
+      }
+      createBlockThenPlan(Model.inEnglish(item), interBtn);
+    });
+    fillRow.append(interBtn);
 
     const allBtn = document.createElement("button");
     allBtn.type = "button";
@@ -1349,6 +1376,25 @@
       showPlan(plan); // ยังไม่เขียนอะไรทั้งนั้น รอกดยืนยันก่อน
     });
     moreRow.append(allBtn);
+
+    const allInterBtn = document.createElement("button");
+    allInterBtn.type = "button";
+    allInterBtn.className = "fill fill-all fill-inter";
+    allInterBtn.textContent = "เติมทั้งฟอร์ม · Inter";
+    allInterBtn.title = "ใช้กับบล็อกที่มีอยู่แล้วและเลือกไว้ — เติมฉบับภาษาอังกฤษ";
+    allInterBtn.addEventListener("click", () => {
+      if (!Model.hasEnglish(item)) {
+        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › แปลเป็นอังกฤษ ก่อน");
+        return;
+      }
+      const plan = buildPlan(Model.inEnglish(item));
+      if (!plan.length) {
+        showNote("ไม่เจอช่องที่เติมได้บนหน้านี้ — เปิดฟอร์มเพิ่มผลงานก่อน แล้วค่อยกด");
+        return;
+      }
+      showPlan(plan);
+    });
+    moreRow.append(allInterBtn);
 
     const n = imageCounts[item.id] || 0;
     if (n) {
@@ -1379,7 +1425,7 @@
   }
 
   function renderList() {
-    const shown = Model.filterItems(items, { type: activeType, tag: activeTag, q: query });
+    const shown = Model.filterItems(items, { type: activeType, tag: activeTag, q: query, inter: interOnly });
     count.textContent =
       shown.length === items.length ? `${items.length} ผลงาน` : `${shown.length}/${items.length} ผลงาน`;
 

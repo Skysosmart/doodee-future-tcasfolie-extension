@@ -337,3 +337,254 @@ test("mergeFolioItems ไม่แตะผลงานที่ไม่เก�
   assert.equal(out.items.length, 2);
   assert.equal(out.items[0].id, mine.id);
 });
+
+test("makeItem เก็บวันและเวลา กับลิงก์ เป็นช่องของตัวเอง", () => {
+  const item = M.makeItem({
+    type: "รางวัล / เกียรติบัตร",
+    title: "การแข่งขันสมมติ",
+    org: "สมาคมสมมติ",
+    when: "24 พ.ค. 2569",
+    link: "https://example.invalid/",
+    level: "ระดับชาติ",
+  });
+  assert.equal(item.when, "24 พ.ค. 2569");
+  assert.equal(item.link, "https://example.invalid/");
+  assert.equal(item.org, "สมาคมสมมติ");
+});
+
+test("normalize เติมช่องใหม่ให้ของเก่าที่ยังไม่มี แล้วบอกว่าต้องเขียนกลับ", () => {
+  const old = [
+    {
+      id: "a1",
+      type: "กิจกรรม",
+      title: "กิจกรรมสมมติ",
+      org: "โรงเรียนสมมติ",
+      level: "",
+      result: "",
+      hours: "",
+      detail: "",
+      tags: [],
+      createdAt: 1,
+    },
+  ];
+  const out = M.normalize(old);
+  assert.equal(out.items[0].when, "");
+  assert.equal(out.items[0].link, "");
+  assert.equal(out.changed, true, "ของเก่าต้องถูกเขียนกลับหนึ่งครั้ง");
+});
+
+test("normalize ที่ผ่านแล้วต้องนิ่ง ไม่เขียนกลับซ้ำ", () => {
+  const made = [M.makeItem({ type: "กิจกรรม", title: "ก" }, { id: "x", now: 1 })];
+  assert.equal(M.normalize(made).changed, false, "ลำดับ key ของ makeItem ต้องตรงกับ normalize");
+});
+
+test("filterItems ค้นเจอจากวันและเวลา และจากลิงก์", () => {
+  const items = M.normalize([
+    M.makeItem({ type: "กิจกรรม", title: "ก", when: "24 พ.ค. 2569" }, { id: "a", now: 1 }),
+    M.makeItem({ type: "กิจกรรม", title: "ข", link: "https://pranakorn.example/" }, { id: "b", now: 1 }),
+  ]).items;
+  assert.deepEqual(M.filterItems(items, { q: "2569" }).map((i) => i.id), ["a"]);
+  assert.deepEqual(M.filterItems(items, { q: "pranakorn" }).map((i) => i.id), ["b"]);
+});
+
+test("parseImport ยังอ่านไฟล์ backup เก่าที่ไม่มีช่องใหม่ได้", () => {
+  const text = JSON.stringify({
+    app: "doodee-future",
+    version: 1,
+    items: [{ id: "old1", type: "กิจกรรม", title: "ของเก่า", org: "โรงเรียนสมมติ", detail: "" }],
+  });
+  const { items } = M.parseImport(text);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].when, "");
+  assert.equal(items[0].link, "");
+});
+
+test("makeItem เก็บสถานะการเข้าร่วมแยกจากผลรางวัล", () => {
+  const item = M.makeItem({
+    type: "กิจกรรม",
+    title: "ค่ายสมมติ",
+    status: "ได้เข้าร่วมและส่งผลงาน",
+  });
+  assert.equal(item.status, "ได้เข้าร่วมและส่งผลงาน");
+  assert.equal(item.result, "", "ผลรางวัลต้องไม่ถูกเติมแทน");
+});
+
+test("normalize เติม status ให้ของเก่า แล้วบอกว่าต้องเขียนกลับ", () => {
+  const old = [
+    {
+      id: "a1",
+      type: "กิจกรรม",
+      title: "กิจกรรมสมมติ",
+      org: "โรงเรียนสมมติ",
+      when: "",
+      level: "",
+      result: "",
+      hours: "",
+      link: "",
+      detail: "",
+      tags: [],
+      createdAt: 1,
+    },
+  ];
+  const out = M.normalize(old);
+  assert.equal(out.items[0].status, "");
+  assert.equal(out.changed, true, "ของเก่าต้องถูกเขียนกลับหนึ่งครั้ง");
+});
+
+test("filterItems ค้นเจอจากสถานะการเข้าร่วม", () => {
+  const items = M.normalize([
+    M.makeItem({ type: "กิจกรรม", title: "ก", status: "ได้เข้าร่วมและส่งผลงาน" }, { id: "a", now: 1 }),
+    M.makeItem({ type: "กิจกรรม", title: "ข", result: "เหรียญทอง" }, { id: "b", now: 1 }),
+  ]).items;
+  assert.deepEqual(M.filterItems(items, { q: "ส่งผลงาน" }).map((i) => i.id), ["a"]);
+});
+
+test("ป้ายกำกับของแฟ้มอยู่ที่ Model ที่เดียว", () => {
+  assert.deepEqual(M.STATUS_LABELS, ["สถานะการเข้าร่วม"]);
+  assert.deepEqual(M.RESULT_LABELS, ["ผลรางวัล / อันดับ", "ผลการอบรม", "ผลตอบรับ / รางวัล"]);
+});
+
+test("normalizeEn คืนหกช่องเสมอ และทิ้งคีย์แปลกปลอม", () => {
+  const en = M.normalizeEn({ title: " Science Camp ", nope: "x", detail: 5 });
+  assert.deepEqual(Object.keys(en), ["title", "org", "when", "result", "status", "detail"]);
+  assert.equal(en.title, "Science Camp");
+  assert.equal(en.detail, "", "ค่าที่ไม่ใช่สตริงต้องกลายเป็นว่าง");
+  assert.deepEqual(M.normalizeEn(null), {
+    title: "", org: "", when: "", result: "", status: "", detail: "",
+  });
+});
+
+test("normalize เติม en ให้ของเก่า แล้วยังนิ่งเมื่อผ่านรอบสอง", () => {
+  const old = [{ id: "a1", type: "กิจกรรม", title: "ของเก่า", detail: "" }];
+  const once = M.normalize(old);
+  assert.deepEqual(Object.keys(once.items[0].en), M.EN_FIELDS);
+  assert.equal(once.changed, true);
+  assert.equal(M.normalize(once.items).changed, false, "ลำดับ key ของ makeItem/normalize ต้องตรงกัน");
+});
+
+test("hasEnglish ดูที่หัวข้ออังกฤษ", () => {
+  const blank = M.makeItem({ type: "กิจกรรม", title: "ก" });
+  assert.equal(M.hasEnglish(blank), false);
+  const done = M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "A" } });
+  assert.equal(M.hasEnglish(done), true);
+});
+
+test("inEnglish สลับหกช่อง และไม่ถอยไปใช้ภาษาไทย", () => {
+  const item = M.makeItem({
+    type: "กิจกรรม",
+    title: "ค่ายสมมติ",
+    org: "โรงเรียนสมมติ",
+    when: "24 พ.ค. 2569",
+    result: "",
+    status: "ได้เข้าร่วมและส่งผลงาน",
+    detail: "รายละเอียดภาษาไทย",
+    level: "ระดับชาติ",
+    hours: "48",
+    en: {
+      title: "Imaginary Camp",
+      org: "Imaginary School",
+      when: "24 May 2026",
+      status: "Participated and submitted work",
+      detail: "",
+    },
+  });
+  const out = M.inEnglish(item);
+  assert.equal(out.title, "Imaginary Camp");
+  assert.equal(out.when, "24 May 2026");
+  assert.equal(out.status, "Participated and submitted work");
+  assert.equal(out.detail, "", "ช่องที่ยังไม่ได้แปลต้องว่าง ห้ามคืนข้อความไทย");
+  assert.equal(out.level, "ระดับชาติ", "ระดับใช้ค่าไทยของเว็บเหมือนเดิม");
+  assert.equal(out.hours, "48");
+});
+
+test("filterItems กรองเฉพาะชิ้นที่มีฉบับอังกฤษ และค้นจากข้อความอังกฤษได้", () => {
+  const items = M.normalize([
+    M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "Robotics Club" } }, { id: "a", now: 1 }),
+    M.makeItem({ type: "กิจกรรม", title: "ข" }, { id: "b", now: 1 }),
+  ]).items;
+  assert.deepEqual(M.filterItems(items, { inter: true }).map((i) => i.id), ["a"]);
+  assert.deepEqual(M.filterItems(items, { q: "robotics" }).map((i) => i.id), ["a"]);
+});
+
+test("นำเข้าไฟล์ที่ไม่มีฉบับอังกฤษ ต้องไม่ลบฉบับอังกฤษที่มีอยู่", () => {
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "Mine" } }, { id: "x", now: 1 });
+  const incoming = M.makeItem({ type: "กิจกรรม", title: "ก แก้แล้ว" }, { id: "x", now: 1 });
+  const out = M.mergeImport([mine], [incoming]);
+  assert.equal(out.items[0].title, "ก แก้แล้ว");
+  assert.equal(out.items[0].en.title, "Mine", "ซิงก์จากเว็บทับฉบับอังกฤษไม่ได้");
+
+  const newer = M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "Newer" } }, { id: "x", now: 1 });
+  assert.equal(M.mergeImport([mine], [newer]).items[0].en.title, "Newer", "ไฟล์ที่มีอังกฤษมาต้องทับได้");
+});
+
+test("นำเข้าอัตโนมัติจากแฟ้มต้องไม่ลบฉบับอังกฤษ", () => {
+  const mine = M.makeItem({ type: "รางวัล / เกียรติบัตร", title: "เหรียญทอง", en: { title: "Gold medal" } });
+  const out = M.mergeFolioItems([mine], M.folioToItems({ awards: [{ title: "เหรียญทอง", description: "แก้แล้ว" }] }));
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].detail, "แก้แล้ว");
+  assert.equal(out.items[0].en.title, "Gold medal");
+});
+
+test("นำเข้าอัตโนมัติจากแฟ้มต้องไม่ลบสถานะที่ผู้ใช้พิมพ์เอง", () => {
+  // folioToItems ไม่เคยเติม status ให้ (เว็บไม่ส่งค่านี้มา) — สถานะที่พิมพ์เองต้องรอดจากการนำเข้าซ้ำ
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ค่ายทดสอบ", status: "เข้าร่วมครบ" });
+  const out = M.mergeFolioItems([mine], M.folioToItems({ activities: [{ title: "ค่ายทดสอบ", description: "แก้แล้ว" }] }));
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].detail, "แก้แล้ว");
+  assert.equal(out.items[0].status, "เข้าร่วมครบ");
+});
+
+test("นำเข้าอัตโนมัติจากแฟ้มต้องไม่ลบจำนวนชั่วโมงที่ผู้ใช้พิมพ์เอง", () => {
+  // folioToItems เติม hours: "" ให้เสมอ (เว็บไม่ส่งค่านี้มา) — ของที่พิมพ์เองต้องรอดจากการนำเข้าซ้ำ
+  const mine = M.makeItem({ type: "กิจกรรม", title: "ค่ายทดสอบชั่วโมง", hours: "12" });
+  const out = M.mergeFolioItems(
+    [mine],
+    M.folioToItems({ activities: [{ title: "ค่ายทดสอบชั่วโมง", description: "แก้แล้ว" }] }),
+  );
+  assert.equal(out.items.length, 1);
+  assert.equal(out.items[0].detail, "แก้แล้ว");
+  assert.equal(out.items[0].hours, "12");
+});
+
+test("ส่งออกแล้วนำเข้ากลับ ฉบับอังกฤษต้องครบ", () => {
+  const items = [M.makeItem({ type: "กิจกรรม", title: "ก", en: { title: "A", detail: "B" } }, { id: "x", now: 1 })];
+  const { items: back } = M.parseImport(JSON.stringify(M.toExport(items, 1)));
+  assert.equal(back[0].en.title, "A");
+  assert.equal(back[0].en.detail, "B");
+});
+
+test("shouldApplyTranslation รับเมื่อ token/formSession/editingId ตรงกันทั้งสาม", () => {
+  const state = { token: 1, formSession: 1, editingId: "x" };
+  assert.equal(M.shouldApplyTranslation(state, { token: 1, formSession: 1, editingId: "x" }), true);
+});
+
+test("shouldApplyTranslation ปฏิเสธเมื่อ token ขยับ (กดซ้ำ/สลับแล้วกดใหม่)", () => {
+  const sent = { token: 1, formSession: 1, editingId: "x" };
+  assert.equal(M.shouldApplyTranslation(sent, { token: 2, formSession: 1, editingId: "x" }), false);
+});
+
+test("shouldApplyTranslation ปฏิเสธเมื่อ formSession ขยับแม้ editingId ยังเป็น null ทั้งคู่ (เคสเพิ่มชิ้นใหม่ระหว่างรอ)", () => {
+  const sent = { token: 1, formSession: 1, editingId: null };
+  assert.equal(M.shouldApplyTranslation(sent, { token: 1, formSession: 2, editingId: null }), false);
+});
+
+test("shouldApplyTranslation ปฏิเสธเมื่อสลับไปแก้ชิ้นอื่น (editingId เปลี่ยน)", () => {
+  const sent = { token: 1, formSession: 1, editingId: "a" };
+  assert.equal(M.shouldApplyTranslation(sent, { token: 1, formSession: 1, editingId: "b" }), false);
+});
+
+// guessKind ของ content.js ห่อ kindFromHaystack ตัวนี้ไว้ชั้นเดียว (ส่วนที่เหลือพึ่ง DOM
+// เทสต์ตรงนี้ไม่ได้) — ลำดับการสแกนใน FIELD_HINTS คือส่วนที่เคยไม่มีเทสต์คลุมเลย
+test("kindFromHaystack จับป้ายจริงห้าแบบได้ถูกชนิด", () => {
+  assert.equal(M.kindFromHaystack("สถานะการเข้าร่วม"), "status");
+  assert.equal(M.kindFromHaystack("ผลการอบรม"), "result");
+  assert.equal(M.kindFromHaystack("ผลตอบรับ / รางวัล"), "result");
+  assert.equal(M.kindFromHaystack("ผลรางวัล / อันดับ"), "result");
+  assert.equal(M.kindFromHaystack("รายละเอียด"), "detail");
+});
+
+test("kindFromHaystack: คำใบ้ของ org (สถาบัน) ต้องไม่ไปจับ สถานะการเข้าร่วม", () => {
+  // ถ้าเรียงผิดจน org แซงหน้า status การเปลี่ยนลำดับ FIELD_HINTS ครั้งต่อไปจะพังแบบเงียบ ๆ
+  assert.equal("สถานะการเข้าร่วม".includes("สถาบัน"), false, "สมมติฐานของเทสต์นี้: ไม่ใช่ substring กันเอง");
+  assert.equal(M.kindFromHaystack("สถานะการเข้าร่วม"), "status");
+});

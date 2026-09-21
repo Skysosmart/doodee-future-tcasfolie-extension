@@ -152,8 +152,13 @@
   }
 
   // text item ของหน้า → แถว { y, text }: จัดกลุ่มตาม y (PDF นับขึ้น เรียงมากไปน้อย)
-  function buildRows(items, tolerance) {
+  // opts.twins === false ปิดการซ่อมฝาแฝด — ใช้กับไฟล์ที่ไม่ได้ฝังข้อความสองชุด
+  // (แฟ้มของ TCASFolio) เพราะข้อความซ้ำในนั้นเป็นของจริง ไม่ใช่ฝาแฝดพิการ
+  // วัดจริง 2026-09-15: "สถานะการเข้าร่วม : ได้เข้าร่วมและส่งผลงาน"
+  // ถูกซ่อมจนเหลือ "สถานะการเข้าร่วม : ได้และส่งผลงาน"
+  function buildRows(items, tolerance, opts) {
     const tol = Number.isFinite(tolerance) ? tolerance : 2;
+    const twins = !(opts && opts.twins === false);
     const rows = [];
     for (const item of items || []) {
       const str = clean(item && typeof item.str === "string" ? item.str : "");
@@ -172,7 +177,18 @@
     }
     return rows
       .sort((a, b) => b.y - a.y)
-      .map((r) => ({ y: r.y, h: r.h || 0, text: dropTwins(joinParts(r.parts.sort((a, b) => a.x - b.x))) }))
+      .map((r) => ({
+        y: r.y,
+        h: r.h || 0,
+        // ถอด PUA + ประกอบ ำ ต้องทำหลัง join เพราะ ํ กับ า มาคนละ item
+        // และต้องทำก่อน dropTwins เพื่อให้เทียบฝาแฝดบนข้อความที่ถูกแล้ว
+        text: (() => {
+          const joined = root.PdfGlyphs.composeThai(
+            root.PdfGlyphs.unpua(joinParts(r.parts.sort((a, b) => a.x - b.x))),
+          );
+          return twins ? dropTwins(joined) : joined;
+        })(),
+      }))
       .filter((r) => r.text);
   }
 
@@ -340,7 +356,7 @@
       }
     }
     paras.push(buf);
-    return paras.map((t) => dropTwins(t)).filter(Boolean);
+    return paras.map((t) => dropTwins(root.PdfGlyphs.composeThai(t))).filter(Boolean);
   }
 
   function guessFrom(hints, text) {
@@ -349,6 +365,64 @@
       if (words.some((w) => hay.includes(w.toLowerCase()))) return value;
     }
     return "";
+  }
+
+  // เดือนไทย เต็มก่อนย่อ เพราะ alternation ใช้ตัวที่ตรงก่อน
+  const MONTHS = [
+    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+  ];
+  const MONTH = MONTHS.map((m) => m.replace(/\./g, "\\.")).join("|");
+
+  // เรียงจากเจาะจงที่สุดไปกว้างที่สุด — ตัวแรกที่เจอคือคำตอบ
+  // ไม่ดักคำว่า "วันที่:" ตรงนี้ เพราะในเล่มอิสระมันกินข้อความท้ายบรรทัดไปด้วย
+  // (แฟ้มที่มีป้ายกำกับจริงเป็นหน้าที่ของ pdfFolio.js)
+  const WHEN_PATTERNS = [
+    new RegExp(`\\d{1,2}\\s*(?:${MONTH})\\s*\\d{4}\\s*[-–]\\s*\\d{1,2}\\s*(?:${MONTH})\\s*\\d{4}`),
+    new RegExp(`(?:${MONTH})\\s*[-–]\\s*(?:${MONTH})\\s*\\d{4}`),
+    new RegExp(`\\d{1,2}\\s*(?:${MONTH})\\s*\\d{4}`),
+    new RegExp(`(?:${MONTH})\\s*\\d{4}`),
+    /\d{1,2}\/\d{1,2}\/\d{4}/,
+    /(?:พ\.?ศ\.?|ค\.?ศ\.?)\s*\d{4}/,
+    /(?:25|20)\d{2}/,
+  ];
+
+  function guessWhen(text) {
+    const src = String(text || "");
+    for (const re of WHEN_PATTERNS) {
+      const hit = src.match(re);
+      if (hit) return hit[0].replace(/\s+/g, " ").trim();
+    }
+    return "";
+  }
+
+  // คำที่ขึ้นต้นชื่อหน่วยงาน ยาวก่อนสั้น (สำนักงาน ต้องมาก่อน สำนัก)
+  const ORG_HEADS = [
+    "กองบัญชาการ", "มหาวิทยาลัย", "กระทรวง", "วิทยาลัย", "สำนักงาน", "โรงพยาบาล",
+    "โรงเรียน", "สถาบัน", "องค์กร", "สมาคม", "มูลนิธิ", "บริษัท", "ศูนย์",
+    "สำนัก", "คณะ", "กรม", "กอง",
+  ];
+
+  function guessOrg(text) {
+    const src = String(text || "");
+    let at = -1;
+    let head = "";
+    for (const word of ORG_HEADS) {
+      const found = src.indexOf(word);
+      if (found === -1) continue;
+      // เอาคำที่มาก่อนในข้อความ ถ้าตำแหน่งเท่ากันเอาคำที่ยาวกว่า
+      if (at === -1 || found < at || (found === at && word.length > head.length)) {
+        at = found;
+        head = word;
+      }
+    }
+    if (at === -1) return "";
+    const rest = src.slice(at);
+    const stop = rest.search(/[\n·]|\s{2,}/);
+    const out = (stop === -1 ? rest : rest.slice(0, stop)).trim();
+    return out.length > 80 ? out.slice(0, 80).trim() : out;
   }
 
   function guessType(text) {
@@ -449,16 +523,32 @@
   function toDrafts(pages) {
     const prepared = (pages || []).map((p) => ({
       page: Number(p && p.page) || 0,
-      lines: groupParagraphs(repairRows(buildRows(dropOrphanMarks(dropOverlapping((p && p.items) || []))))),
+      // normalizeItems ต้องมาก่อน dropOverlapping/dropOrphanMarks เสมอ
+      // ไม่งั้นสองตัวนั้นจะเห็นเครื่องหมายเปล่า ๆ ของ Chrome แล้วลบทิ้ง
+      lines: groupParagraphs(
+        repairRows(
+          buildRows(
+            dropOrphanMarks(
+              dropOverlapping(root.PdfGlyphs.normalizeItems((p && p.items) || [])),
+            ),
+          ),
+        ),
+      ),
     }));
 
     const { drafts, skipped } = segment(prepared);
     return {
-      drafts: drafts.map((d) => ({
-        ...d,
-        type: guessType(`${d.title} ${d.detail}`),
-        level: guessLevel(`${d.title} ${d.detail}`),
-      })),
+      drafts: drafts.map((d) => {
+        const hay = `${d.title}\n${d.detail}`;
+        return {
+          ...d,
+          type: guessType(hay),
+          level: guessLevel(hay),
+          // เดาเฉพาะตอนช่องยังว่าง ห้ามทับของที่อ่านมาตรง ๆ
+          org: d.org || guessOrg(hay),
+          when: d.when || guessWhen(hay),
+        };
+      }),
       skipped,
     };
   }
@@ -483,6 +573,8 @@
     isProfilePage,
     guessType,
     guessLevel,
+    guessOrg,
+    guessWhen,
     segment,
     toDrafts,
   };
