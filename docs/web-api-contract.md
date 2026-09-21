@@ -52,20 +52,9 @@ if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { st
       "type": "รางวัล / เกียรติบัตร",           // ห้าค่าเท่านั้น ดูตารางล่าง
       "title": "รางวัลชนะเลิศ MakeX Challenger",
       "org": "สพฐ. ร่วมกับ MakeX Thailand",
-      "when": "28 มิ.ย. 2568 - 2 พ.ย. 2568",    // ข้อความตามต้นฉบับ ไม่ใช่วันที่จริง
       "level": "ระดับชาติ",                    // สี่ค่าเท่านั้น ดูตารางล่าง
       "result": "ชนะเลิศ",
-      "status": "",                           // สถานะการเข้าร่วม (ใช้กับหมวดกิจกรรม)
-      "en": {                                  // ฉบับภาษาอังกฤษ (ไม่ส่งมาก็ได้)
-        "title": "MakeX Challenger champion",
-        "org": "OBEC with MakeX Thailand",
-        "when": "28 Jun 2025 - 2 Nov 2025",
-        "result": "Champion",
-        "status": "",
-        "detail": "Designed and programmed the robot…"
-      },
       "hours": "24",                          // string ไม่ใช่ number
-      "link": "https://example.com/",         // ลิงก์แสดงผลงาน (ถ้ามี)
       "detail": "ออกแบบและเขียนโปรแกรมหุ่นยนต์…",
       "tags": ["robotics"],
       "createdAt": 1756000000000              // ใช้จับคู่รูปตอนนำเข้า ห้ามเปลี่ยนเมื่อส่งซ้ำ
@@ -79,11 +68,8 @@ if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { st
 }
 ```
 
-ช่อง `when` เก็บวันและเวลาเป็น**ข้อความตามที่เขียนในเล่ม** (เช่น `24 พ.ค. 2569`,
-`1 มี.ค. 2569 - ปัจจุบัน`, `20–22 และ 24 ต.ค. 2568`) ไม่แปลงเป็นวันที่จริง เพราะต้นฉบับ
-มีทั้งช่วงคร่าว ๆ และคำว่า "ปัจจุบัน" ซึ่งแปลงกลับไม่ได้โดยไม่ทำข้อมูลเพี้ยน
-ฝั่งเว็บส่ง `date_achieved` หรือ `start_date`/`end_date` มาได้ตามเดิม
-ฟิลด์ที่ไม่รู้จักจะถูกตัดทิ้งตอน `normalize`
+ไม่มีช่อง `startDate` / `endDate` — ส่วนขยายไม่มีที่เก็บ ถ้าอยากให้วันที่ติดไปด้วย
+ใส่ไว้ในบรรทัดแรกของ `detail` ฟิลด์ที่ไม่รู้จักจะถูกตัดทิ้งตอน `normalize`
 
 ### `type` — ห้าค่านี้เท่านั้น
 
@@ -115,14 +101,10 @@ if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { st
 | `type` | จาก `achievement_type` (ดูตารางบน) | `กิจกรรม` |
 | `title` | `title` | `activity_name` |
 | `org` | `organization` | `organization` |
-| `when` | `date_achieved` | `start_date`-`end_date` |
 | `level` | `achievement_level` | เว้นว่าง |
 | `result` | ไม่มี — ดึงจาก `title`/`description` ถ้ามี | `role` |
 | `hours` | ไม่มี | `hours_committed` (แปลงเป็น string) |
-| `link` | ไม่มี | ไม่มี |
 | `detail` | `description` | `description` + `impact_description` |
-| `status` | ไม่มี | ไม่มี |
-| `en` | ไม่มี | ไม่มี |
 | `createdAt` | `created_at` เป็น epoch ms | `created_at` เป็น epoch ms |
 | รูป | `certificate_url` + `evidence_urls` | ไม่มี |
 
@@ -152,8 +134,6 @@ TCASFolio รับไหวราว **1.2 MB / ด้านยาว 1800 px**
 
 - **upsert ไม่ใช่ทับ** ของเดิมที่ไม่มีในชุดใหม่ไม่หาย
 - **ไม่ทับรูป** ชิ้นที่มีรูปอยู่แล้วจะถูกข้าม (ผู้ใช้อาจแนบเองไว้)
-- **ไม่ทับฉบับอังกฤษด้วยค่าว่าง** — ชิ้นที่ส่งมาโดยไม่มี `en` หรือทุกช่องใน `en` ว่าง จะไม่ลบฉบับอังกฤษ
-  ที่มีอยู่แล้วในคลัง (เว็บยังไม่เคยส่ง `en` มาด้วย จุดนี้กันไว้ล่วงหน้า)
 - ผู้ใช้เห็นจำนวนก่อนบันทึกทุกครั้ง และผลลัพธ์อ่านกลับจากคลังจริงมายืนยัน
 
 ## ยังไม่ทำ
@@ -211,7 +191,7 @@ POST /api/portfolio/analyse
   `training`/`workshop` -> การอบรม, ที่เหลือ -> กิจกรรม)
 - `achievement_level` -> สี่ระดับของ TCASFolio
 - **เคารพ `portfolio_visibility: false`** ชิ้นที่เจ้าของซ่อนไว้จะไม่ถูกนำเข้า และรายงานว่าข้ามไปกี่ชิ้น
-- `date_achieved` / `start_date`-`end_date` -> ช่อง `when` (ไม่แปะหัว `detail` แล้ว ตั้งแต่ 2026-09-15)
+- ไม่มีช่องวันที่ในคลัง จึงเอา `date_achieved` / `start_date`-`end_date` ไปไว้หัว `detail`
 - `role` -> ช่องผลงาน · `hours_committed` -> ชั่วโมง (เป็น string) · `skills_gained` -> แท็ก
 
 ไฟล์นี้**ไม่มีรูป** (มีแต่ `certificate_url` ซึ่งเป็นลิงก์) รูปยังต้องมาจาก `ดึงจากเว็บ`

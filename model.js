@@ -21,54 +21,7 @@
     "ระดับนานาชาติ",
   ];
 
-  // ป้ายกำกับที่ TCASFolio ใช้ในแฟ้มและในฟอร์ม — เก็บไว้ที่เดียว
-  // pdfFolio.js ใช้หาค่าจากไฟล์ · content.js ใช้เดาว่าช่องบนหน้าเว็บคือช่องอะไร
-  // (content script โหลด model.js อยู่แล้ว ดู manifest.json)
-  //
-  // แต่ละหมวดมีป้ายของตัวเองป้ายเดียว: รางวัล→ผลรางวัล · กิจกรรม→สถานะการเข้าร่วม
-  // อบรม→ผลการอบรม · ผลงานสร้างสรรค์→ผลตอบรับ (วัดจากแฟ้มจริง 2026-09-15)
-  const STATUS_LABELS = ["สถานะการเข้าร่วม"];
-  const RESULT_LABELS = ["ผลรางวัล / อันดับ", "ผลการอบรม", "ผลตอบรับ / รางวัล"];
-
   const EXPORT_VERSION = 1;
-
-  // คำที่ใช้เดาว่าช่องบนหน้าเว็บคือช่องอะไร — ดูจาก label/placeholder/name/id
-  // อยู่ที่นี่ (ไม่ใช่ content.js) เพราะเป็นตรรกะล้วน ๆ ทดสอบด้วย node --test ได้ตรง ๆ
-  // ลำดับมีผล: ตัวที่จับคู่ก่อนชนะ เช่น "status" ต้องมาก่อน "result" เพราะข้อความ
-  // อย่าง "ผลการอบรม"/"ผลตอบรับ / รางวัล" อยู่ใน RESULT_LABELS แต่ "สถานะการเข้าร่วม"
-  // ต้องไม่ไปโดนคำใบ้ของ "org" (เช่น "สถาบัน") จับก่อนเช่นกัน
-  const FIELD_HINTS = [
-    ["title", ["ชื่อผลงาน", "ชื่อรางวัล", "ชื่อโครงงาน", "ชื่อกิจกรรม", "ชื่อหลักสูตร",
-               "ชื่อการอบรม", "หัวข้อ", "ชื่อเรื่อง", "ชื่อ", "title", "name", "topic", "subject",
-               "free__title"]],
-    ["org", ["หน่วยงาน", "องค์กร", "สถาบัน", "ผู้จัด", "ผู้มอบ", "แหล่งที่มา", "สถานที่",
-             "โรงเรียน", "มหาวิทยาลัย", "organization", "organizer", "issuer", "institute",
-             "provider", "agency", "school"]],
-    ["status", [...STATUS_LABELS, "participation"]],
-    ["detail", ["รายละเอียด", "คำอธิบาย", "อธิบาย", "เนื้อหา", "สรุป", "ประโยชน์", "บทบาท",
-                "เรียงความ", "เหตุผล", "description", "detail", "summary", "content", "about",
-                "essay", "reason", "free__body"]],
-    ["year", ["ช่วงเวลา", "วันที่", "ปีที่", "ปี พ.ศ.", "พ.ศ.", "ค.ศ.", "ปีการศึกษา",
-              "year", "date", "เมื่อ"]],
-    ["level", ["ระดับ", "level", "scope"]],
-    ["result", ["ผลรางวัล", "อันดับ", "ผลการแข่งขัน", "รางวัลที่ได้", "ผลการอบรม", "ผลตอบรับ",
-                "result", "award", "rank", "placement"]],
-    ["hours", ["จำนวนชั่วโมง", "ชั่วโมง", "hours", "duration"]],
-    ["link", ["ลิงก์", "ลิงค์", "ลิ้งก์", "url", "เว็บไซต์", "link"]],
-  ];
-
-  // สแกน haystack (label/placeholder/name/id ต่อกันเป็นสตริงเดียว) หาคำใบ้แรกที่ตรง
-  // เป็นส่วนที่ทดสอบได้ล้วน ๆ — ส่วนที่ต้องพึ่ง DOM (fallback เดาจาก tag) อยู่ที่
-  // guessKind ใน content.js แทน
-  function kindFromHaystack(text) {
-    const haystack = String(text || "").toLowerCase();
-    for (const [kind, words] of FIELD_HINTS) {
-      for (const w of words) {
-        if (haystack.includes(w.toLowerCase())) return kind;
-      }
-    }
-    return "";
-  }
 
   function str(value) {
     return typeof value === "string" ? value.trim() : "";
@@ -97,35 +50,6 @@
     return normalizeTags(tags).join(", ");
   }
 
-  // ฉบับภาษาอังกฤษของผลงานชิ้นเดียวกัน — ใช้ตอนลงแฟ้มหลักสูตรอินเตอร์
-  // ระดับ/หมวด/ชั่วโมง/ลิงก์/แท็ก/รูป ใช้ร่วมกัน ไม่ต้องแปล
-  // (ตัวเลือก "ระดับ" ของ TCASFolio เป็นภาษาไทยทุกแฟ้ม แปลแล้วจะหาตัวเลือกไม่เจอ)
-  const EN_FIELDS = ["title", "org", "when", "result", "status", "detail"];
-
-  function normalizeEn(value) {
-    const src = value && typeof value === "object" ? value : {};
-    const out = {};
-    for (const key of EN_FIELDS) out[key] = str(src[key]);
-    return out;
-  }
-
-  function isEmptyEn(en) {
-    return EN_FIELDS.every((key) => !str(en && en[key]));
-  }
-
-  function hasEnglish(item) {
-    return !!(item && item.en && str(item.en.title));
-  }
-
-  // ห้ามถอยไปใช้ภาษาไทยเมื่อช่องอังกฤษว่าง — ข้อความไทยที่หลุดลงแฟ้มอินเตอร์
-  // คือสิ่งที่ฟีเจอร์นี้มีไว้กัน ปล่อยว่างแล้วคนกรอกเห็นเองดีกว่า
-  function inEnglish(item) {
-    const en = normalizeEn(item && item.en);
-    const out = { ...item };
-    for (const key of EN_FIELDS) out[key] = en[key];
-    return out;
-  }
-
   function makeItem(fields, options) {
     const opts = options || {};
     return {
@@ -133,15 +57,11 @@
       type: str(fields.type),
       title: str(fields.title),
       org: str(fields.org),
-      when: str(fields.when),
       level: LEVELS.includes(str(fields.level)) ? str(fields.level) : "",
       result: str(fields.result),
-      status: str(fields.status),
       hours: str(fields.hours),
-      link: str(fields.link),
       detail: str(fields.detail),
       tags: normalizeTags(fields.tags),
-      en: normalizeEn(fields.en),
       createdAt: Number.isFinite(opts.now) ? opts.now : Date.now(),
     };
   }
@@ -158,16 +78,12 @@
         type: str(entry.type),
         title: str(entry.title),
         org: str(entry.org),
-        when: str(entry.when),
         // ระดับที่ไม่ตรงตัวเลือกของเว็บ ปล่อยว่างดีกว่าเก็บค่าที่เติมไม่ได้
         level: LEVELS.includes(str(entry.level)) ? str(entry.level) : "",
         result: str(entry.result),
-        status: str(entry.status),
         hours: str(entry.hours),
-        link: str(entry.link),
         detail: str(entry.detail),
         tags: normalizeTags(entry.tags),
-        en: normalizeEn(entry.en),
         createdAt: Number.isFinite(entry.createdAt) ? entry.createdAt : 0,
       }));
     // เทียบทั้งก้อน รวมลำดับ key ด้วย — ของที่ normalize แล้วจะได้ false เสมอ
@@ -195,15 +111,11 @@
       .toLowerCase()
       .split(/\s+/)
       .filter(Boolean);
-    const interOnly = !!(criteria && criteria.inter);
     return items.filter((entry) => {
       if (type && entry.type !== type) return false;
       if (tag && !entry.tags.includes(tag)) return false;
-      if (interOnly && !hasEnglish(entry)) return false;
       if (!words.length) return true;
-      const en = normalizeEn(entry.en);
-      const hay = [entry.title, entry.org, entry.when, entry.result, entry.status, entry.link, entry.detail,
-                   entry.tags.join(" "), ...EN_FIELDS.map((key) => en[key])]
+      const hay = [entry.title, entry.org, entry.result, entry.detail, entry.tags.join(" ")]
         .join(" ")
         .toLowerCase();
       return words.every((w) => hay.includes(w));
@@ -294,14 +206,9 @@
       if (seen.has(raw.id)) redone += 1;
       seen.add(raw.id);
 
-      const current = items.find((entry) => entry.id === item.id);
-      // ของที่ดึงจากเว็บ/แฟ้ม/PDF ไม่เคยมีฉบับอังกฤษมาด้วย ถ้าปล่อยให้ทับ
-      // ฉบับอังกฤษจะหายทุกครั้งที่ซิงก์ — ว่างแปลว่า "ไม่รู้" ไม่ใช่ "ลบ"
-      const next = current && isEmptyEn(item.en) ? { ...item, en: current.en } : item;
-
-      if (current) updated += 1;
+      if (items.some((entry) => entry.id === item.id)) updated += 1;
       else added += 1;
-      items = upsert(items, next);
+      items = upsert(items, item);
     }
     return { items, added, updated, redone };
   }
@@ -357,11 +264,9 @@
               type,
               title,
               org: str(entry.organizer),
-              when: str(entry.date) || str(entry.period),
               level: str(entry.level),
               result: str(entry.result),
               hours: "",
-              link: str(entry.link),
               detail: str(entry.description),
               tags: [],
             },
@@ -387,17 +292,7 @@
         (old) => old.type === entry.item.type && old.title === entry.item.title,
       );
       const item = match
-        ? {
-            ...entry.item,
-            id: match.id,
-            createdAt: match.createdAt,
-            tags: match.tags,
-            // สถานะที่ผู้ใช้พิมพ์เอง — แฟ้มบนเว็บไม่ได้ส่งค่านี้มา จึงห้ามล้างทิ้งตอนนำเข้าซ้ำ
-            status: str(entry.item.status) ? entry.item.status : match.status,
-            // จำนวนชั่วโมงก็เหมือนกัน — folioToItems เติม "" ให้เสมอเพราะเว็บไม่ส่งมา
-            hours: str(entry.item.hours) ? entry.item.hours : match.hours,
-            en: isEmptyEn(entry.item.en) ? match.en : entry.item.en,
-          }
+        ? { ...entry.item, id: match.id, createdAt: match.createdAt, tags: match.tags }
         : entry.item;
       if (match) updated += 1;
       else added += 1;
@@ -410,19 +305,10 @@
   root.Model = {
     TYPES,
     LEVELS,
-    STATUS_LABELS,
-    RESULT_LABELS,
-    FIELD_HINTS,
-    kindFromHaystack,
     EXPORT_VERSION,
     newId,
     normalizeTags,
     formatTags,
-    EN_FIELDS,
-    normalizeEn,
-    isEmptyEn,
-    hasEnglish,
-    inEnglish,
     makeItem,
     normalize,
     upsert,

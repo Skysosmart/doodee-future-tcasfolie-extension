@@ -1,7 +1,6 @@
 "use strict";
 
 require("../model.js");
-require("../pdfGlyphs.js");
 require("../pdfText.js");
 
 const { test } = require("node:test");
@@ -278,11 +277,11 @@ test("clean ล้างอักขระควบคุมที่ pdf.js ส
 });
 
 test("isProfilePage จับหน้าปกและหน้าประวัติ/transcript", () => {
-  assert.equal(P.isProfilePage(["PORTFOLIO", "Somchai Jaidee", "2026"]).skip, true);
+  assert.equal(P.isProfilePage(["PORTFOLIO", "Nonthanaphong Saechua", "2026"]).skip, true);
   assert.equal(
     P.isProfilePage([
-      "Name: Somchai Surname: Jaidee",
-      "Contact: 081-2345678 Email: somchai.jaidee@example.com",
+      "Name: Nonthanaphong Surname: Saechua",
+      "Contact: 061-6564406 Email: saechua2551@gmail.com",
     ]).skip,
     true,
   );
@@ -337,75 +336,4 @@ test("isProfilePage ไม่ข้ามหน้าผลงานที่ม
       "sections of the website, including the Team Section and Pricing Section of their portfolio",
   ]);
   assert.equal(r.skip, false);
-});
-
-test("buildRows ถอด PUA และประกอบ ำ หลังต่อแถวแล้ว", () => {
-  // ประกอบ ำ ตอนเป็น item ไม่ได้ เพราะ ํ กับ า มาคนละ item
-  const rows = P.buildRows([
-    { str: "ประจ", x: 10, y: 700, w: 20, h: 10 },
-    { str: "\u0E4D", x: 30, y: 700, w: 0, h: 10 },
-    { str: "\u0E32", x: 30, y: 700, w: 5, h: 10 },
-    { str: "ป", x: 35, y: 700, w: 5, h: 10 },
-    { str: "\uF702", x: 40, y: 700, w: 0, h: 10 },
-  ]);
-  assert.deepEqual(rows.map((r) => r.text), ["ประจำปี"]);
-});
-
-test("buildRows ไม่ยุบ item ที่ไม่มี w (fixture เดิมต้องไม่พัง)", () => {
-  const rows = P.buildRows([
-    { str: "ซ้าย", x: 10, y: 700 },
-    { str: "ขวา", x: 90, y: 700 },
-  ]);
-  assert.deepEqual(rows.map((r) => r.text), ["ซ้ายขวา"]);
-});
-
-test("buildRows ปิดการซ่อมฝาแฝดได้ สำหรับไฟล์ที่ข้อความซ้ำเป็นของจริง", () => {
-  // แฟ้มของ TCASFolio ไม่ได้ฝังข้อความสองชุด "เข้าร่วม" ที่ซ้ำกันคือของจริง
-  const items = [{ str: "สถานะการเข้าร่วม : ได้เข้าร่วมและส่งผลงาน", x: 10, y: 700, w: 200, h: 10 }];
-  assert.deepEqual(
-    P.buildRows(items, undefined, { twins: false }).map((r) => r.text),
-    ["สถานะการเข้าร่วม : ได้เข้าร่วมและส่งผลงาน"],
-  );
-  // ค่าเริ่มต้นยังซ่อมเหมือนเดิม (เล่ม Canva ต้องพึ่งมัน)
-  assert.notEqual(P.buildRows(items)[0].text, "สถานะการเข้าร่วม : ได้เข้าร่วมและส่งผลงาน");
-});
-
-test("guessWhen หาวันที่จากข้อความอิสระ", () => {
-  assert.equal(P.guessWhen("จัดวันที่ 24 พ.ค. 2569 ที่โรงเรียนสมมติ"), "24 พ.ค. 2569");
-  assert.equal(
-    P.guessWhen("ค่ายจัดระหว่าง 28 มิ.ย. 2568 - 2 พ.ย. 2568 รวมสี่เดือน"),
-    "28 มิ.ย. 2568 - 2 พ.ย. 2568",
-  );
-  assert.equal(P.guessWhen("แข่งเมื่อ มกราคม-เมษายน 2569"), "มกราคม-เมษายน 2569");
-  assert.equal(P.guessWhen("จัดเมื่อ 01/06/2568 ตอนเช้า"), "01/06/2568");
-  assert.equal(P.guessWhen("ปีการศึกษา 2569 ที่ผ่านมา"), "2569");
-  assert.equal(P.guessWhen("ไม่มีวันที่เลยสักตัว"), "");
-});
-
-test("guessOrg หยิบวลีที่ขึ้นต้นด้วยคำที่เป็นหน่วยงาน", () => {
-  assert.equal(P.guessOrg("เข้าร่วมกิจกรรมที่ มหาวิทยาลัยสมมติ\nรายละเอียดอื่น ๆ"), "มหาวิทยาลัยสมมติ");
-  assert.equal(P.guessOrg("จัดโดยสำนักงานสมมติแห่งชาติ · อื่น ๆ"), "สำนักงานสมมติแห่งชาติ");
-  assert.equal(P.guessOrg("ไม่มีชื่อหน่วยงานในข้อความนี้"), "");
-});
-
-test("guessOrg เลือกคำที่มาก่อนในข้อความ ไม่ใช่คำที่มาก่อนในตาราง", () => {
-  assert.equal(P.guessOrg("ร่วมกับ มหาวิทยาลัยสมมติ\nและ โรงเรียนสมมติ"), "มหาวิทยาลัยสมมติ");
-});
-
-test("toDrafts เดาหน่วยงานและวันที่ให้ร่างจากเล่มอิสระ", () => {
-  const detail =
-    "เข้าร่วมค่ายที่ มหาวิทยาลัยสมมติ\nเมื่อ 24 พ.ค. 2569 ได้เรียนรู้การทำงานเป็นทีมและการแก้ปัญหา " +
-    "ซึ่งเป็นประสบการณ์ที่ทำให้เห็นภาพการเรียนจริงชัดเจนขึ้นมาก และช่วยให้ตัดสินใจเลือกสาขาได้";
-  const out = P.toDrafts([
-    {
-      page: 1,
-      items: [
-        { str: "ค่ายสมมติ", x: 10, y: 700, w: 60, h: 16 },
-        { str: detail, x: 10, y: 600, w: 400, h: 14 },
-      ],
-    },
-  ]);
-  assert.equal(out.drafts.length, 1);
-  assert.equal(out.drafts[0].org, "มหาวิทยาลัยสมมติ");
-  assert.equal(out.drafts[0].when, "24 พ.ค. 2569");
 });

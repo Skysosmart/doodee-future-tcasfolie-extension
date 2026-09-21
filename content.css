@@ -242,13 +242,6 @@
   color: var(--sky);
 }
 
-.tag.is-en {
-  border-color: var(--blue);
-  background: var(--blue-soft);
-  color: var(--blue);
-  letter-spacing: 0.04em;
-}
-
 /* ---------- ปุ่มในการ์ด ---------- */
 .fillrow {
   display: flex;
@@ -295,16 +288,6 @@
 .fill-new:hover {
   background: #163c6c;
   border-color: #163c6c;
-}
-
-.fill-inter {
-  border-color: var(--blue);
-  color: var(--blue);
-  font-weight: 600;
-}
-
-.fill-inter:hover {
-  background: var(--blue-soft);
 }
 
 .fillrow.more .fill {

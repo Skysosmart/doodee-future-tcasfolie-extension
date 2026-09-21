@@ -6,27 +6,6 @@ const el = (id) => document.getElementById(id);
 let editingId = null; // null = กำลังเพิ่มใหม่, มีค่า = กำลังแก้ไขชิ้นนั้น
 let statusTimer = null;
 
-// ช่องฉบับอังกฤษ — คีย์ตรงกับ Model.EN_FIELDS
-const EN_INPUTS = {
-  title: "enTitle",
-  org: "enOrg",
-  when: "enWhen",
-  result: "enResult",
-  status: "enStatus",
-  detail: "enDetail",
-};
-
-function readEn() {
-  const out = {};
-  for (const [key, id] of Object.entries(EN_INPUTS)) out[key] = el(id).value;
-  return out;
-}
-
-function writeEn(en) {
-  const clean = Model.normalizeEn(en);
-  for (const [key, id] of Object.entries(EN_INPUTS)) el(id).value = clean[key];
-}
-
 function showStatus(message, isError) {
   const status = el("status");
   status.textContent = message;
@@ -85,15 +64,11 @@ function readForm() {
     type: el("type").value,
     title: el("title").value,
     org: el("org").value,
-    when: el("when").value,
     level: el("level").value,
     result: el("result").value,
-    status: el("statusField").value,
     hours: el("hours").value,
-    link: el("link").value,
     tags: el("tags").value,
     detail: el("detail").value,
-    en: readEn(),
   };
 }
 
@@ -156,9 +131,7 @@ function resetForm() {
   }
   el("type").selectedIndex = 0;
   el("level").selectedIndex = 0;
-  for (const id of ["title", "org", "when", "result", "statusField", "hours", "link", "tags", "detail"]) el(id).value = "";
-  writeEn({});
-  el("enBox").open = false;
+  for (const id of ["title", "org", "result", "hours", "tags", "detail"]) el(id).value = "";
   el("formHeading").textContent = "เพิ่มผลงานจากเล่มเดิม";
   el("saveBtn").textContent = "บันทึกลงคลัง";
   el("cancelBtn").hidden = true;
@@ -200,17 +173,11 @@ async function startEditing(item) {
   el("type").value = item.type;
   el("title").value = item.title;
   el("org").value = item.org;
-  el("when").value = item.when || "";
   el("level").value = item.level || "";
   el("result").value = item.result || "";
-  el("statusField").value = item.status || "";
   el("hours").value = item.hours || "";
-  el("link").value = item.link || "";
   el("tags").value = Model.formatTags(item.tags);
   el("detail").value = item.detail;
-  writeEn(item.en);
-  // เปิดกล่องให้เองเมื่อชิ้นนี้มีฉบับอังกฤษแล้ว จะได้เห็นว่ามีอยู่
-  el("enBox").open = Model.hasEnglish(item);
   el("formHeading").textContent = "แก้ไขผลงาน";
   el("saveBtn").textContent = "อัปเดต";
   el("cancelBtn").hidden = false;
@@ -226,16 +193,9 @@ function itemCard(item) {
   title.className = "item-title";
   title.textContent = item.title;
 
-  if (Model.hasEnglish(item)) {
-    const badge = document.createElement("span");
-    badge.className = "en-badge";
-    badge.textContent = "EN";
-    title.appendChild(badge);
-  }
-
   const meta = document.createElement("div");
   meta.className = "item-meta";
-  const extras = [item.level, item.result, item.status].filter(Boolean).join(" · ");
+  const extras = [item.level, item.result].filter(Boolean).join(" · ");
   meta.textContent = [item.type, item.org, extras].filter(Boolean).join(" · ");
 
   box.append(title, meta);
