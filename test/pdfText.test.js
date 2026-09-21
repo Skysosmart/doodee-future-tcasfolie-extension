@@ -278,11 +278,11 @@ test("clean ล้างอักขระควบคุมที่ pdf.js ส
 });
 
 test("isProfilePage จับหน้าปกและหน้าประวัติ/transcript", () => {
-  assert.equal(P.isProfilePage(["PORTFOLIO", "Nonthanaphong Saechua", "2026"]).skip, true);
+  assert.equal(P.isProfilePage(["PORTFOLIO", "Somchai Jaidee", "2026"]).skip, true);
   assert.equal(
     P.isProfilePage([
-      "Name: Nonthanaphong Surname: Saechua",
-      "Contact: 061-6564406 Email: saechua2551@gmail.com",
+      "Name: Somchai Surname: Jaidee",
+      "Contact: 081-2345678 Email: somchai.jaidee@example.com",
     ]).skip,
     true,
   );

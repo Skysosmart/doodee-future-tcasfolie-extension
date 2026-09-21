@@ -126,18 +126,6 @@
     return out;
   }
 
-  // ผลที่มาช้าต้องไม่ลงช่องของผลงานชิ้นอื่น — ตัดสินจากสามอย่างที่จับไว้ตอนกดปุ่ม
-  // token กัน "กดซ้ำ/สลับแล้วกดใหม่" ในฟอร์มเดิม · formSession กัน "เพิ่มใหม่หลังบันทึก/เริ่มแก้ไข"
-  // (editingId เป็น null ได้ทั้งสองฝั่ง เทียบ null !== null ไม่พอ) · editingId กัน "สลับไปแก้ชิ้นอื่น"
-  function shouldApplyTranslation(sent, now) {
-    return !!(
-      sent && now &&
-      sent.token === now.token &&
-      sent.formSession === now.formSession &&
-      sent.editingId === now.editingId
-    );
-  }
-
   function makeItem(fields, options) {
     const opts = options || {};
     return {
@@ -435,7 +423,6 @@
     isEmptyEn,
     hasEnglish,
     inEnglish,
-    shouldApplyTranslation,
     makeItem,
     normalize,
     upsert,

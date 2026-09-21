@@ -808,12 +808,34 @@
     clearNote();
   });
 
-  function fillField(value, what, button, armed) {
+  function fillField(item, lang, value, what, button, armed) {
     const target = lastField;
     const problem = fieldProblem(target);
     if (problem) {
       showNote(problem);
       return false;
+    }
+
+    // ปุ่ม ⋯ เขียนตรงเข้า lastField โดยไม่รู้ว่าช่องนั้นอยู่บล็อกภาษาไหน — ป้ายชื่อปุ่มเป็นตัวกันเดียว
+    // เดิม เช็คเพิ่ม: หาบล็อกที่ครอบช่องนี้ อ่านหัวข้อของมัน ถ้าหัวข้อนั้นตรงกับ "อีกภาษา" เป๊ะ
+    // (ไม่ใช่ภาษาที่ปุ่มนี้จะเขียน) ให้ปฏิเสธ — ตรงเป๊ะเท่านั้น เจอบล็อกที่หาไม่รู้จัก/หัวข้อว่าง/
+    // ไม่ตรงทั้งคู่ ถือว่าไม่รู้ ให้เติมตามปกติเหมือนเดิม (กันพลาดแบบ false positive)
+    const block = outerBlock(target);
+    const titleEl = block && block.querySelector("[class*=free__title]");
+    const blockTitle = titleEl ? readField(titleEl).trim() : "";
+    // หัวข้อไทยกับอังกฤษเหมือนกันเป๊ะได้ (ชื่อรางวัลที่ไม่ต้องแปล) — ตอนนั้นแยกบล็อกไม่ออก
+    // ห้ามเดา ปล่อยให้เติมตามปกติ ไม่งั้นปุ่มที่ถูกต้องจะโดนปฏิเสธ
+    const thTitle = item.title.trim();
+    const enTitle = Model.normalizeEn(item.en).title.trim();
+    if (blockTitle && thTitle !== enTitle) {
+      if (lang === "en" && blockTitle === thTitle) {
+        showNote(`ช่องที่เลือกอยู่ในบล็อก "${blockTitle}" ซึ่งเป็นฉบับภาษาไทย — เลือกบล็อกฉบับอังกฤษก่อนแล้วค่อยกดปุ่มนี้`);
+        return false;
+      }
+      if (lang === "th" && enTitle && blockTitle === enTitle) {
+        showNote(`ช่องที่เลือกอยู่ในบล็อก "${blockTitle}" ซึ่งเป็นฉบับภาษาอังกฤษ — เลือกบล็อกฉบับไทยก่อนแล้วค่อยกดปุ่มนี้`);
+        return false;
+      }
     }
 
     const previous = readField(target);
@@ -830,7 +852,7 @@
     return false;
   }
 
-  function fillButton(item, what, value) {
+  function fillButton(item, what, value, lang) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "fill";
@@ -839,7 +861,7 @@
     let armed = false;
     button.addEventListener("click", () => {
       clearTimeout(armTimer);
-      armed = fillField(value, what, button, armed);
+      armed = fillField(item, lang, value, what, button, armed);
       if (armed) {
         // ปล่อยไว้นานเกินไปแล้วมากดโดนพอดีจะกลายเป็นทับของเดิมโดยไม่ตั้งใจ
         armTimer = setTimeout(() => {
@@ -1326,7 +1348,7 @@
       ["หน่วยงาน", item.org],
       ["รายละเอียด", item.detail],
     ]) {
-      if (value) moreRow.append(fillButton(item, what, value));
+      if (value) moreRow.append(fillButton(item, what, value, "th"));
     }
     // ปุ่มเดิมสามปุ่มเขียนแต่ภาษาไทย — มีฉบับอังกฤษแล้วเพิ่มอีกชุดให้เลือกได้ ไม่ทับของเดิม
     if (Model.hasEnglish(item)) {
@@ -1336,7 +1358,7 @@
         ["หน่วยงาน · EN", en.org],
         ["รายละเอียด · EN", en.detail],
       ]) {
-        if (value) moreRow.append(fillButton(item, what, value));
+        if (value) moreRow.append(fillButton(item, what, value, "en"));
       }
     }
 
@@ -1355,7 +1377,7 @@
     interBtn.title = "ลงพอร์ตด้วยฉบับภาษาอังกฤษ (หลักสูตรอินเตอร์)";
     interBtn.addEventListener("click", () => {
       if (!Model.hasEnglish(item)) {
-        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › แปลเป็นอังกฤษ ก่อน");
+        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › พิมพ์ฉบับภาษาอังกฤษ ก่อน");
         return;
       }
       createBlockThenPlan(Model.inEnglish(item), interBtn);
@@ -1384,7 +1406,7 @@
     allInterBtn.title = "ใช้กับบล็อกที่มีอยู่แล้วและเลือกไว้ — เติมฉบับภาษาอังกฤษ";
     allInterBtn.addEventListener("click", () => {
       if (!Model.hasEnglish(item)) {
-        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › แปลเป็นอังกฤษ ก่อน");
+        showNote("ยังไม่มีฉบับภาษาอังกฤษ — กดไอคอนส่วนขยาย › แก้ไข › พิมพ์ฉบับภาษาอังกฤษ ก่อน");
         return;
       }
       const plan = buildPlan(Model.inEnglish(item));
